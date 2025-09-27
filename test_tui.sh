@@ -4,7 +4,7 @@
 
 set -e
 
-echo "🧪 Testing Weather Man TUI Charts"
+echo "🧪 Testing Weather Man TUI interactive Charts"
 echo "=================================="
 
 # Build the project first
