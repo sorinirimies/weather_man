@@ -117,7 +117,7 @@ impl WeatherTui {
                         ]
                         .as_ref(),
                     )
-                    .split(f.size());
+                    .split(f.area());
 
                 // Render title
                 let units_text = match config.units.as_str() {
@@ -284,10 +284,10 @@ impl WeatherTui {
 }
 
 /// Render a weather calendar showing conditions for a range of dates
-fn render_weather_calendar<B: ratatui::backend::Backend>(
+fn render_weather_calendar(
     daily_data: &[DailyForecast],
     location: &Location,
-    frame: &mut ratatui::Frame<B>,
+    frame: &mut ratatui::Frame,
     area: ratatui::layout::Rect,
 ) {
     // Create a simple text-based calendar view

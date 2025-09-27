@@ -10,13 +10,13 @@ use std::f64::consts::PI;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Renders a stunning weather canvas with highly detailed, professional-quality visuals
-pub fn render_weather_canvas<B: ratatui::backend::Backend>(
+pub fn render_weather_canvas(
     condition: &WeatherCondition,
     temperature: f64,
     humidity: u8,
     wind_speed: f64,
     is_day: bool,
-    frame: &mut Frame<B>,
+    frame: &mut Frame,
     area: Rect,
 ) {
     let canvas = Canvas::default()
@@ -1432,9 +1432,9 @@ fn draw_weather_indicators(ctx: &mut Context, temperature: f64, humidity: u8, wi
 }
 
 /// Render current weather canvas with improved error handling
-pub fn render_current_weather_canvas<B: ratatui::backend::Backend>(
+pub fn render_current_weather_canvas(
     hourly_data: &[HourlyForecast],
-    frame: &mut Frame<B>,
+    frame: &mut Frame,
     area: Rect,
 ) {
     if let Some(current) = hourly_data.first() {
@@ -1509,11 +1509,7 @@ fn is_daytime(timestamp: &chrono::DateTime<chrono::Utc>) -> bool {
 }
 
 /// Render enhanced forecast canvas with detailed mini weather scenes
-pub fn render_forecast_canvas<B: ratatui::backend::Backend>(
-    daily_data: &[DailyForecast],
-    frame: &mut Frame<B>,
-    area: Rect,
-) {
+pub fn render_forecast_canvas(daily_data: &[DailyForecast], frame: &mut Frame, area: Rect) {
     let canvas = Canvas::default()
         .block(
             Block::default()

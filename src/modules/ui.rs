@@ -1070,7 +1070,7 @@ impl WeatherUI {
         let mut terminal = Terminal::new(backend)?;
 
         let result = terminal.draw(|f| {
-            let area = f.size();
+            let area = f.area();
             let is_day = {
                 use chrono::{Local, Timelike};
                 let hour = Local::now().hour();
