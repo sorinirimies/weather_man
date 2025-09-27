@@ -254,6 +254,7 @@ pub struct Forecast {
 }
 
 /// Represents air quality data
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AirQuality {
     pub aqi: u8,    // 1-5 scale (1: Good, 2: Fair, 3: Moderate, 4: Poor, 5: Very Poor)
@@ -268,6 +269,7 @@ pub struct AirQuality {
 }
 
 /// Represents alert information
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WeatherAlert {
     pub sender: String,
