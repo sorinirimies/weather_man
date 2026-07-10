@@ -5,6 +5,8 @@
 **A weather app written entirely in Rust — desktop GUI & terminal UI**
 
 [![Crates.io](https://img.shields.io/crates/v/weatherman.svg)](https://crates.io/crates/weatherman)
+[![GUI Downloads](https://img.shields.io/crates/d/weatherman?label=GUI%20downloads)](https://crates.io/crates/weatherman)
+[![TUI Downloads](https://img.shields.io/crates/d/weatherman-tui?label=TUI%20downloads)](https://crates.io/crates/weatherman-tui)
 [![docs.rs](https://docs.rs/weatherman-core/badge.svg)](https://docs.rs/weatherman-core)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
