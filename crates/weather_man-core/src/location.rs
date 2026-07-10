@@ -3,7 +3,7 @@ use reqwest::Client;
 use serde_json::Value;
 use std::time::Duration;
 
-use crate::modules::types::Location;
+use crate::types::Location;
 
 /// Handles location detection and queries
 #[derive(Clone)]

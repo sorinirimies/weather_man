@@ -1,45 +1,51 @@
-[package]
-name = "weather_man"
-version = "0.2.10"
-edition = "2021"
-authors = ["Sorin Albu-Irimies <mihaiirimies@gmail.com>"]
-description = "A feature-rich Rust-based CLI for weather forecasting with cyberpunk-themed animations"
-readme = "README.md"
-license = "MIT"
-keywords = ["cli", "weather", "forecast", "cyberpunk", "animations"]
-categories = ["command-line-utilities", "visualization"]
+[workspace]
+members = [
+    "crates/weather_man-core",
+    "crates/weather_man-gui",
+    "crates/weather_man-tui",
+]
+resolver = "2"
 
-[dependencies]
-clap = { version = "4.3", features = ["derive"] }
-tokio = { version = "1.28", features = ["full"] }
-reqwest = { version = "0.11", features = ["json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
-colored = "2.0"
-console = "0.16"
-dialoguer = "0.12"
-indicatif = "0.18"
-crossterm = "0.28"
-rand = "0.9"
-url = "2.5"
+[workspace.package]
+version    = "0.3.0"
+edition    = "2021"
+authors    = ["Sorin Albu-Irimies <mihaiirimies@gmail.com>"]
+license    = "MIT"
+repository = "https://github.com/sorinirimies/weather_man"
+
+# ── Shared dependency versions ─────────────────────────────────────────────────
+# Pin versions here once; each crate references them with `{ workspace = true }`
+# so there is a single source of truth.
+
+[workspace.dependencies]
+# Core / shared
+anyhow      = "1"
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+chrono      = { version = "0.4", features = ["serde"] }
+tokio       = { version = "1", features = ["full"] }
+reqwest     = { version = "0.12", features = ["json"] }
 urlencoding = "2.1"
-dirs = "5.0"
-strum = "0.26"
+strum       = { version = "0.26", features = ["derive"] }
 strum_macros = "0.26"
-ratatui = { version = "0.29", default-features = true }
-unicode-width = "0.2"
-geo = "0.24"
-geocoding = "0.4"
-spinners = "4.1"
-ctrlc = "3.5"
-anyhow = "1.0"
-futures = "0.3"
-thiserror = "1.0"
+futures     = "0.3"
 
-[dev-dependencies]
-tempfile = "3.23"
-tokio-test = "0.4"
-mockito = "1.5"
-assert_cmd = "2.0"
-predicates = "3.1"
+# GUI (Iced)
+iced = { version = "0.13", features = ["tokio", "canvas", "advanced"] }
+
+# TUI (Ratatui)
+ratatui   = "0.29"
+crossterm = "0.28"
+clap      = { version = "4", features = ["derive"] }
+
+# Internal crates
+weather_man-core = { path = "crates/weather_man-core", version = "0.3.0" }
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level     = 3
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"

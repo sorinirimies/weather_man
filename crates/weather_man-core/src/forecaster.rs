@@ -5,13 +5,44 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration as StdDuration;
 
-use crate::modules::types::{
+use crate::types::{
     CurrentWeather, DailyForecast, Forecast, HourlyForecast, Location, WeatherCondition,
     WeatherConfig, WeatherDescription,
 };
 
 /// Open-Meteo base URL (doesn't require API key)
 const OPENMETEO_BASE_URL: &str = "https://api.open-meteo.com/v1";
+
+/// A drop-in weather data provider.
+///
+/// Implement this trait to plug a different backend (a paid API, a local cache,
+/// a test double, …) into any consumer that depends only on `weather_man-core`.
+#[allow(async_fn_in_trait)]
+pub trait WeatherProvider {
+    /// Current conditions for a location.
+    async fn current(&self, location: &Location) -> Result<CurrentWeather>;
+    /// Hourly forecast (up to 48 hours) for a location.
+    async fn hourly(&self, location: &Location) -> Result<Vec<HourlyForecast>>;
+    /// Daily forecast (up to 7 days) for a location.
+    async fn daily(&self, location: &Location) -> Result<Vec<DailyForecast>>;
+    /// Combined current + hourly + daily forecast for a location.
+    async fn forecast(&self, location: &Location) -> Result<Forecast>;
+}
+
+impl WeatherProvider for WeatherForecaster {
+    async fn current(&self, location: &Location) -> Result<CurrentWeather> {
+        self.get_current_weather(location).await
+    }
+    async fn hourly(&self, location: &Location) -> Result<Vec<HourlyForecast>> {
+        self.get_hourly_forecast(location).await
+    }
+    async fn daily(&self, location: &Location) -> Result<Vec<DailyForecast>> {
+        self.get_daily_forecast(location).await
+    }
+    async fn forecast(&self, location: &Location) -> Result<Forecast> {
+        self.get_forecast(location).await
+    }
+}
 
 /// Handles weather data retrieval and processing
 #[derive(Clone)]
@@ -437,67 +468,77 @@ impl WeatherForecaster {
 
     /// Convert WMO weather code to our internal WeatherCondition
     pub fn wmo_code_to_condition(&self, code: u32) -> WeatherCondition {
-        match code {
-            0 => WeatherCondition::Clear,              // Clear sky
-            1..=3 => WeatherCondition::Clouds,         // Partly cloudy
-            45 | 48 => WeatherCondition::Fog,          // Fog
-            51..=55 => WeatherCondition::Drizzle,      // Drizzle
-            56 | 57 => WeatherCondition::Drizzle,      // Freezing Drizzle
-            61..=65 => WeatherCondition::Rain,         // Rain
-            66 | 67 => WeatherCondition::Rain,         // Freezing Rain
-            71..=75 => WeatherCondition::Snow,         // Snow
-            77 => WeatherCondition::Snow,              // Snow grains
-            80..=82 => WeatherCondition::Rain,         // Rain showers
-            85..=86 => WeatherCondition::Snow,         // Snow showers
-            95 => WeatherCondition::Thunderstorm,      // Thunderstorm
-            96 | 99 => WeatherCondition::Thunderstorm, // Thunderstorm with hail
-            _ => WeatherCondition::Unknown,
-        }
+        wmo_code_to_condition(code)
     }
 
     /// Get weather description from WMO weather code
     pub fn get_weather_description_from_wmo(&self, code: u32, is_day: bool) -> WeatherDescription {
-        let (main, description, icon) = match code {
-            0 => ("Clear", "Clear sky", if is_day { "01d" } else { "01n" }),
-            1 => ("Clouds", "Mainly clear", if is_day { "02d" } else { "02n" }),
-            2 => (
-                "Clouds",
-                "Partly cloudy",
-                if is_day { "03d" } else { "03n" },
-            ),
-            3 => ("Clouds", "Overcast", if is_day { "04d" } else { "04n" }),
-            45 => ("Fog", "Fog", "50d"),
-            48 => ("Fog", "Depositing rime fog", "50d"),
-            51 => ("Drizzle", "Light drizzle", "09d"),
-            53 => ("Drizzle", "Moderate drizzle", "09d"),
-            55 => ("Drizzle", "Dense drizzle", "09d"),
-            56 => ("Drizzle", "Light freezing drizzle", "09d"),
-            57 => ("Drizzle", "Dense freezing drizzle", "09d"),
-            61 => ("Rain", "Slight rain", "10d"),
-            63 => ("Rain", "Moderate rain", "10d"),
-            65 => ("Rain", "Heavy rain", "10d"),
-            66 => ("Rain", "Light freezing rain", "10d"),
-            67 => ("Rain", "Heavy freezing rain", "10d"),
-            71 => ("Snow", "Slight snow fall", "13d"),
-            73 => ("Snow", "Moderate snow fall", "13d"),
-            75 => ("Snow", "Heavy snow fall", "13d"),
-            77 => ("Snow", "Snow grains", "13d"),
-            80 => ("Rain", "Slight rain showers", "09d"),
-            81 => ("Rain", "Moderate rain showers", "09d"),
-            82 => ("Rain", "Violent rain showers", "09d"),
-            85 => ("Snow", "Slight snow showers", "13d"),
-            86 => ("Snow", "Heavy snow showers", "13d"),
-            95 => ("Thunderstorm", "Thunderstorm", "11d"),
-            96 => ("Thunderstorm", "Thunderstorm with slight hail", "11d"),
-            99 => ("Thunderstorm", "Thunderstorm with heavy hail", "11d"),
-            _ => ("Unknown", "Unknown weather condition", "50d"),
-        };
+        weather_description_from_wmo(code, is_day)
+    }
+}
 
-        WeatherDescription {
-            id: code,
-            main: main.to_string(),
-            description: description.to_string(),
-            icon: icon.to_string(),
-        }
+/// Convert a WMO weather code to an internal [`WeatherCondition`].
+pub fn wmo_code_to_condition(code: u32) -> WeatherCondition {
+    match code {
+        0 => WeatherCondition::Clear,              // Clear sky
+        1..=3 => WeatherCondition::Clouds,         // Partly cloudy
+        45 | 48 => WeatherCondition::Fog,          // Fog
+        51..=55 => WeatherCondition::Drizzle,      // Drizzle
+        56 | 57 => WeatherCondition::Drizzle,      // Freezing Drizzle
+        61..=65 => WeatherCondition::Rain,         // Rain
+        66 | 67 => WeatherCondition::Rain,         // Freezing Rain
+        71..=75 => WeatherCondition::Snow,         // Snow
+        77 => WeatherCondition::Snow,              // Snow grains
+        80..=82 => WeatherCondition::Rain,         // Rain showers
+        85..=86 => WeatherCondition::Snow,         // Snow showers
+        95 => WeatherCondition::Thunderstorm,      // Thunderstorm
+        96 | 99 => WeatherCondition::Thunderstorm, // Thunderstorm with hail
+        _ => WeatherCondition::Unknown,
+    }
+}
+
+/// Build a [`WeatherDescription`] from a WMO weather code.
+pub fn weather_description_from_wmo(code: u32, is_day: bool) -> WeatherDescription {
+    let (main, description, icon) = match code {
+        0 => ("Clear", "Clear sky", if is_day { "01d" } else { "01n" }),
+        1 => ("Clouds", "Mainly clear", if is_day { "02d" } else { "02n" }),
+        2 => (
+            "Clouds",
+            "Partly cloudy",
+            if is_day { "03d" } else { "03n" },
+        ),
+        3 => ("Clouds", "Overcast", if is_day { "04d" } else { "04n" }),
+        45 => ("Fog", "Fog", "50d"),
+        48 => ("Fog", "Depositing rime fog", "50d"),
+        51 => ("Drizzle", "Light drizzle", "09d"),
+        53 => ("Drizzle", "Moderate drizzle", "09d"),
+        55 => ("Drizzle", "Dense drizzle", "09d"),
+        56 => ("Drizzle", "Light freezing drizzle", "09d"),
+        57 => ("Drizzle", "Dense freezing drizzle", "09d"),
+        61 => ("Rain", "Slight rain", "10d"),
+        63 => ("Rain", "Moderate rain", "10d"),
+        65 => ("Rain", "Heavy rain", "10d"),
+        66 => ("Rain", "Light freezing rain", "10d"),
+        67 => ("Rain", "Heavy freezing rain", "10d"),
+        71 => ("Snow", "Slight snow fall", "13d"),
+        73 => ("Snow", "Moderate snow fall", "13d"),
+        75 => ("Snow", "Heavy snow fall", "13d"),
+        77 => ("Snow", "Snow grains", "13d"),
+        80 => ("Rain", "Slight rain showers", "09d"),
+        81 => ("Rain", "Moderate rain showers", "09d"),
+        82 => ("Rain", "Violent rain showers", "09d"),
+        85 => ("Snow", "Slight snow showers", "13d"),
+        86 => ("Snow", "Heavy snow showers", "13d"),
+        95 => ("Thunderstorm", "Thunderstorm", "11d"),
+        96 => ("Thunderstorm", "Thunderstorm with slight hail", "11d"),
+        99 => ("Thunderstorm", "Thunderstorm with heavy hail", "11d"),
+        _ => ("Unknown", "Unknown weather condition", "50d"),
+    };
+
+    WeatherDescription {
+        id: code,
+        main: main.to_string(),
+        description: description.to_string(),
+        icon: icon.to_string(),
     }
 }

@@ -1,4 +1,4 @@
-use weather_man::modules::types::{DetailLevel, Location, WeatherCondition, WeatherConfig};
+use weather_man_core::{DetailLevel, Location, WeatherCondition, WeatherConfig};
 
 #[test]
 fn test_weather_condition_from_str() {
@@ -101,8 +101,8 @@ fn test_weather_config_default() {
     let config = WeatherConfig::default();
     assert_eq!(config.units, "metric");
     assert_eq!(config.location, None);
-    assert_eq!(config.json_output, false);
-    assert_eq!(config.animation_enabled, true);
+    assert!(!config.json_output);
+    assert!(config.animation_enabled);
     assert_eq!(config.detail_level, DetailLevel::Standard);
 }
 
