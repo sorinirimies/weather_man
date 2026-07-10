@@ -7,8 +7,12 @@ All notable changes to this project will be documented in this file.
 - restructure into a Cargo workspace with a shared weather_man-core library **[BREAKING]**
 - add single-page Ratatui TUI (weather_man-tui)
 - add Iced desktop GUI (weather_man)
+### 🐛 Bug Fixes
+- parse naive Open-Meteo timestamps so hourly forecast populates
 ### 📚 Documentation
 - rewrite README for the GUI + TUI + core workspace
+- update CHANGELOG for v0.3.0
+- add generated TUI demo GIF
 ### 📦 Build
 - add justfile and nushell release scripts
 ### 🔄 CI
