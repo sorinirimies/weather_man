@@ -2,17 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-07-10
+### ♻️  Refactor
+- centralize weather presentation logic in core; reuse across GUI and TUI
+- rename crates to weatherman / weatherman-tui / weatherman-core **[BREAKING]**
+### 📚 Documentation
+- add core library examples and demo GIFs (Git LFS)
+### 🧪 Testing
+- add Nushell script test suite
+**Full Changelog**: https://github.com/sorinirimies/weather_man/compare/v0.3.0...v0.4.0
 ## [0.3.0] - 2026-07-10
 ### ✨ Features
-- restructure into a Cargo workspace with a shared weatherman-core library **[BREAKING]**
-- add single-page Ratatui TUI (weatherman-tui)
-- add Iced desktop GUI (weatherman)
+- restructure into a Cargo workspace with a shared weather_man-core library **[BREAKING]**
+- add single-page Ratatui TUI (weather_man-tui)
+- add Iced desktop GUI (weather_man)
 ### 🐛 Bug Fixes
 - parse naive Open-Meteo timestamps so hourly forecast populates
 ### 📚 Documentation
 - rewrite README for the GUI + TUI + core workspace
 - update CHANGELOG for v0.3.0
 - add generated TUI demo GIF
+- refresh CHANGELOG for v0.3.0
 ### 📦 Build
 - add justfile and nushell release scripts
 ### 🔄 CI

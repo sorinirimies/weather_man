@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version    = "0.3.0"
+version    = "0.4.0"
 edition    = "2021"
 authors    = ["Sorin Albu-Irimies <mihaiirimies@gmail.com>"]
 license    = "MIT"
@@ -39,7 +39,7 @@ crossterm = "0.28"
 clap      = { version = "4", features = ["derive"] }
 
 # Internal crates
-weatherman-core = { path = "crates/weatherman-core", version = "0.3.0" }
+weatherman-core = { path = "crates/weatherman-core", version = "0.4.0" }
 
 [profile.dev]
 opt-level = 0
