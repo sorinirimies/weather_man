@@ -1,162 +1,118 @@
-# Weather Man
+<div align="center">
 
-A feature-rich Rust-based command-line interface for weather forecasting with a clean, minimalist design and interactive charts with calendar view.
+# 🌤️ Weather Man
+
+**A weather app written entirely in Rust — desktop GUI & terminal UI**
 
 [![Crates.io](https://img.shields.io/crates/v/weather_man.svg)](https://crates.io/crates/weather_man)
-![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Release](https://github.com/sorinirimies/weather_man/actions/workflows/release.yml/badge.svg)](https://github.com/sorinirimies/weather_man/actions/workflows/release.yml)
-## Features
+[![docs.rs](https://docs.rs/weather_man-core/badge.svg)](https://docs.rs/weather_man-core)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- Current weather conditions
-- Hourly and daily forecasts
-- Location auto-detection (IP-based)
-- Custom location specification
-- No API key required (uses Open-Meteo)
-- Weather recommendations
-- Support for metric/imperial units
-- Interactive mode with menu-based navigation
-- Interactive charts with calendar view
-  - Hourly temperature trends
-  - Hourly precipitation probability
-  - Daily temperature ranges
-  - Daily precipitation forecast
-  - Calendar view for historical and future dates
-- Automatic chart display after weather information
-- JSON output option for scripting
+</div>
 
-## Installation
+---
 
-### From crates.io
+Weather Man ships two front-ends from a single Rust workspace, backed by a shared,
+framework-free core that doubles as a **drop-in weather API provider library**.
 
-```
+| Crate | Description |
+|-------|-------------|
+| [`weather_man`](crates/weather_man-gui) | Desktop **GUI** (Iced) — search a city, current conditions, hourly + 7-day forecast |
+| [`weather_man-tui`](crates/weather_man-tui) | Terminal **UI** (Ratatui) — single scrollable page, keyboard-driven, great over SSH |
+| [`weather_man-core`](crates/weather_man-core) | Shared **core** — domain models, `WeatherProvider` trait, Open-Meteo backend, geocoding |
+
+Weather data comes from [Open-Meteo](https://open-meteo.com/) (no API key required),
+with geocoding via [Nominatim/OpenStreetMap](https://nominatim.openstreetmap.org/).
+
+## Preview
+
+### Terminal UI
+
+![TUI Demo](crates/weather_man-tui/examples/vhs/generated/tui-demo.gif)
+
+### Desktop GUI
+
+![GUI Demo](crates/weather_man-gui/examples/vhs/generated/gui-demo.gif)
+
+## Install
+
+```bash
+# Desktop GUI
 cargo install weather_man
+
+# Terminal UI
+cargo install weather_man-tui
 ```
-
-You can also check out the [weather_man package on crates.io](https://crates.io/crates/weather_man) for more information.
-
-### From source
-
-```
-git clone https://github.com/sorinirimies/weather_man.git
-cd weather_man
-cargo build --release
-```
-
-The executable will be available at `target/release/weather_man`.
 
 ## Usage
 
-```
-# Current weather at auto-detected location
+### GUI
+
+```bash
 weather_man
-
-# Specify a location
-weather_man --location "New York"
-
-# Daily forecast
-weather_man --mode daily
-
-# Hourly forecast
-weather_man --mode hourly
-
-# Full weather report
-weather_man --mode full
-
-# Interactive mode
-weather_man --mode interactive
-
-# Disable charts display (text output only)
-weather_man --no-charts
-
-# Charts are shown by default after displaying weather information
-
-# Use imperial units
-weather_man --units imperial
-
-# Output as JSON (for scripting)
-weather_man --json
 ```
 
-## Command-line Options
+Type a city and press Enter to search; toggle °C/°F with the units button.
 
-| Option | Description |
-|--------|-------------|
-| `--mode`, `-m` | Display mode: current, forecast, hourly, daily, full, interactive, charts |
-| `--location`, `-l` | Location to check weather for (default: auto-detect) |
-| `--units`, `-u` | Units to display: metric, imperial, standard (default: metric) |
-| `--detail`, `-d` | Level of detail: basic, standard, detailed, debug |
-| `--json`, `-j` | Output results as JSON |
-| `--no-animations`, `-a` | Disable animations |
-| `--no-charts` | Disable charts display (text output only) |
+### TUI
 
-## Charts
+```bash
+weather_man-tui                        # auto-detected location
+weather_man-tui --location "New York"  # specific city
+weather_man-tui --units imperial       # imperial units
+weather_man-tui --json                 # JSON output, no TUI
+```
 
-Weather Man includes interactive charts for visualizing weather data:
+Keys: `↑`/`↓` or `j`/`k` scroll · `PgUp`/`PgDn` page · `g`/`G` top/bottom · `q`/`Esc` quit.
 
-1. **Hourly Temperature Chart**: Line chart showing temperature trends over the next 24 hours
-2. **Hourly Precipitation Chart**: Bar chart showing precipitation probability for each hour
-3. **Daily Temperature Chart**: Line chart showing min/max temperature ranges for the next 7 days
-4. **Daily Precipitation Chart**: Bar chart showing daily precipitation probability with condition information
+## Use the core as a library
 
-Charts are displayed automatically after viewing weather information without requiring any user input.
+`weather_man-core` has no GUI/TUI dependencies and implements a `WeatherProvider`
+trait you can swap out:
 
-Navigate between charts using:
-- Arrow keys or Tab: Switch between chart tabs
-- Keys 1-4: Jump directly to specific charts
-- Q or Esc: Exit charts view
+```rust,no_run
+use weather_man_core::{LocationService, WeatherForecaster, WeatherProvider, WeatherConfig};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let location = LocationService::new().get_location_by_name("Berlin").await?;
+    let provider = WeatherForecaster::new(WeatherConfig::default());
+    let forecast = provider.forecast(&location).await?;
+    println!("{} hourly, {} daily", forecast.hourly.len(), forecast.daily.len());
+    Ok(())
+}
+```
 
 ## Development
 
-### Prerequisites
+This repo uses [`just`](https://github.com/casey/just) as a task runner and
+[`nushell`](https://www.nushell.sh) for release scripts.
 
-- Rust 1.70 or newer
-- Cargo
-
-### Building
-
-```
-cargo build
-```
-
-### Running Tests
-
-```
-cargo test
+```bash
+just             # list all tasks
+just build       # build the workspace
+just run-gui     # launch the GUI
+just run-tui     # launch the TUI
+just test        # run all tests
+just check-all   # fmt + clippy + test
+just vhs-all     # regenerate demo GIFs (needs vhs)
 ```
 
-### Generating Changelog
+### Release
 
-We use [git-cliff](https://github.com/orhun/git-cliff) to generate changelogs:
-
+```bash
+just release-preview   # show unreleased commits
+just release 0.3.1     # bump, changelog, commit, tag, push → triggers Release workflow
 ```
-git cliff --output CHANGELOG.md
-```
 
-## Release Process
-
-1. Update version in Cargo.toml
-2. Create a new tag: `git tag -a v0.1.0 -m "Release v0.1.0"`
-3. Push the tag: `git push origin v0.1.0`
-4. GitHub Actions will automatically generate the changelog and publish to crates.io
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes using conventional commits (`git commit -m 'feat: add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Please follow the [Conventional Commits](https://www.conventionalcommits.org/) format for your commit messages to ensure proper changelog generation.
+Changelogs are generated with [git-cliff](https://github.com/orhun/git-cliff)
+from [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- Weather data provided by [Open-Meteo](https://open-meteo.com/)
-- Geocoding services by [Nominatim/OpenStreetMap](https://nominatim.openstreetmap.org/)
+- Weather data by [Open-Meteo](https://open-meteo.com/)
+- Geocoding by [Nominatim/OpenStreetMap](https://nominatim.openstreetmap.org/)
