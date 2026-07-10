@@ -4,156 +4,114 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.3.0)"
+        required: true
 
 permissions:
   contents: write
-  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build and release
+  # ── Quality gate ──────────────────────────────────────────────────────────
+  check:
+    name: Quality gate
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
           components: rustfmt, clippy
+      - name: Install system deps (Iced)
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --all-features
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
+  # ── GitHub release with binaries ──────────────────────────────────────────
+  release:
+    name: Build & publish release
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            suffix: linux-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            suffix: macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          command: fmt
-          args: --all -- --check
+          targets: ${{ matrix.target }}
+      - name: Install system deps (Iced, Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Run clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings -A deprecated
+      - name: Build release binaries
+        run: cargo build --release --target ${{ matrix.target }} -p weather_man -p weather_man-tui
 
-      - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
-
-      - name: Install cliff
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: git-cliff
-
-      - name: Update version and generate changelog
+      - name: Package binaries
+        shell: bash
         run: |
-          # Extract version from tag (remove 'v' prefix)
-          VERSION=${GITHUB_REF_NAME#v}
-          echo "Updating version to: $VERSION"
+          BIN_DIR="target/${{ matrix.target }}/release"
+          PKG="weather_man-${GITHUB_REF_NAME}-${{ matrix.suffix }}"
+          mkdir -p "$PKG"
+          cp "$BIN_DIR/weather_man" "$PKG/" 2>/dev/null || true
+          cp "$BIN_DIR/weather_man-tui" "$PKG/" 2>/dev/null || true
+          cp README.md LICENSE "$PKG/"
+          tar -czvf "$PKG.tar.gz" "$PKG"
 
-          # Update Cargo.toml version
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
-          
-          # Update version in main.rs
-          sed -i "s/version = \"[0-9.]*\"/version = \"$VERSION\"/" src/main.rs
-
-          # Update full changelog with git-cliff
-          git-cliff --config cliff.toml --latest --output CHANGELOG.md
-
-          # Generate release notes with git-cliff
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
-          # Generate release changelog using git-cliff
-          if [ -n "$LAST_TAG" ]; then
-            # Generate changelog between tags
-            git-cliff --config cliff.toml ${LAST_TAG}..${{ github.ref_name }} --strip header > CLIFF_CHANGES.md
-          else
-            # Generate changelog for first release
-            git-cliff --config cliff.toml --tag ${{ github.ref_name }} --strip header > CLIFF_CHANGES.md
-          fi
-
-          # Create the release note template
-          echo "# Weather CLI ${VERSION}" > RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "## 🚀 What's New" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-
-          if [ -n "$LAST_TAG" ]; then
-            echo "### 📝 Changes since ${LAST_TAG}:" >> RELEASE_CHANGELOG.md
-            echo "" >> RELEASE_CHANGELOG.md
-          else
-            echo "### 🎉 Initial Release" >> RELEASE_CHANGELOG.md
-            echo "" >> RELEASE_CHANGELOG.md
-          fi
-
-          # Add the git-cliff generated changes to the release notes
-          cat CLIFF_CHANGES.md >> RELEASE_CHANGELOG.md
-
-          # Add installation and quick start info
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "## 📦 Installation" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "```bash" >> RELEASE_CHANGELOG.md
-          echo "cargo install weather_man" >> RELEASE_CHANGELOG.md
-          echo "```" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "## 🚀 Quick Start" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "```bash" >> RELEASE_CHANGELOG.md
-          echo "# Get current weather" >> RELEASE_CHANGELOG.md
-          echo "weather_man" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "# Get forecast for a specific location" >> RELEASE_CHANGELOG.md
-          echo "weather_man -m forecast -l \"New York\"" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "# Show interactive charts" >> RELEASE_CHANGELOG.md
-          echo "weather_man -c" >> RELEASE_CHANGELOG.md
-          echo "```" >> RELEASE_CHANGELOG.md
-
-          # Show the generated release notes
-          echo "Generated release notes:"
-          cat RELEASE_CHANGELOG.md
-
-      - name: Build release
-        uses: actions-rs/cargo@v1
+      - name: Generate release notes (git-cliff)
+        if: runner.os == 'Linux'
+        uses: orhun/git-cliff-action@v4
         with:
-          command: build
-          args: --release
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
 
-      - name: Package binary (Linux)
-        run: |
-          tar -C target/release -czvf weather_man-${{ github.ref_name }}-linux-x86_64.tar.gz weather_man
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Create / update GitHub release
+        uses: softprops/action-gh-release@v2
         with:
-          body_path: RELEASE_CHANGELOG.md
+          body_path: ${{ runner.os == 'Linux' && 'RELEASE_NOTES.md' || '' }}
           files: |
-            weather_man-${{ github.ref_name }}-linux-x86_64.tar.gz
-            LICENSE
-            README.md
-            CHANGELOG.md
+            weather_man-*.tar.gz
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to crates.io
-        uses: actions-rs/cargo@v1
-        with:
-          command: publish
-          args: --token ${{ secrets.CRATES_IO_TOKEN }} --allow-dirty
+  # ── Publish to crates.io (core → gui → tui) ───────────────────────────────
+  publish:
+    name: Publish to crates.io
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref_name, '-') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system deps (Iced)
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev
+      - uses: Swatinem/rust-cache@v2
+      - name: Publish crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          set -e
+          cargo publish -p weather_man-core
+          echo "Waiting for crates.io to index weather_man-core…"
+          sleep 45
+          cargo publish -p weather_man
+          cargo publish -p weather_man-tui
