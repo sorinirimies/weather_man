@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "crates/weather_man-core",
-    "crates/weather_man-gui",
-    "crates/weather_man-tui",
+    "crates/weatherman-core",
+    "crates/weatherman-gui",
+    "crates/weatherman-tui",
 ]
 resolver = "2"
 
@@ -39,7 +39,7 @@ crossterm = "0.28"
 clap      = { version = "4", features = ["derive"] }
 
 # Internal crates
-weather_man-core = { path = "crates/weather_man-core", version = "0.3.0" }
+weatherman-core = { path = "crates/weatherman-core", version = "0.3.0" }
 
 [profile.dev]
 opt-level = 0

@@ -1,4 +1,4 @@
-# weather_man workspace — task runner
+# weatherman workspace — task runner
 # Install just:      cargo install just
 # Install vhs:       brew install vhs  OR  go install github.com/charmbracelet/vhs@latest
 # Install git-cliff: cargo install git-cliff
@@ -45,29 +45,29 @@ build:
 
 # Build only the core library (dev)
 build-core:
-    cargo build -p weather_man-core
+    cargo build -p weatherman-core
 
 # Build only the GUI crate (dev)
 build-gui:
-    cargo build -p weather_man
+    cargo build -p weatherman
 
 # Build only the TUI crate (dev)
 build-tui:
-    cargo build -p weather_man-tui
+    cargo build -p weatherman-tui
 
 # Build release binaries for GUI and TUI
 build-release:
-    cargo build --release -p weather_man -p weather_man-tui
+    cargo build --release -p weatherman -p weatherman-tui
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 # Launch the Iced desktop GUI
 run-gui:
-    cargo run -p weather_man
+    cargo run -p weatherman
 
 # Launch the Ratatui terminal UI
 run-tui:
-    cargo run -p weather_man-tui
+    cargo run -p weatherman-tui
 
 # Alias: default run launches the GUI
 run: run-gui
@@ -80,11 +80,29 @@ test:
 
 # Test only the core library
 test-core:
-    cargo test -p weather_man-core --all-features
+    cargo test -p weatherman-core --all-features
 
 # Test only the TUI crate
 test-tui:
-    cargo test -p weather_man-tui --all-features
+    cargo test -p weatherman-tui --all-features
+
+# Run the Nushell script tests
+test-nu: _check-nu
+    nu scripts/tests/run_all.nu
+
+# Run both the Rust and Nushell test suites
+test-all-nu: test test-nu
+    @echo "✅ All Rust and Nushell tests passed!"
+
+# ── Examples / demos ──────────────────────────────────────────────────────────
+
+# Print a forecast using only the core library (network). e.g. just example-report Berlin
+example-report location="":
+    cargo run -p weatherman-core --example report -- "{{ location }}"
+
+# Run the offline custom-provider library demo (no network)
+example-provider:
+    cargo run -p weatherman-core --example custom_provider
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 
@@ -104,8 +122,8 @@ fmt-check:
 clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-# Run all quality checks (format, clippy, test) — must pass before a release.
-check-all: fmt clippy test
+# Run all quality checks (format, clippy, test, nu) — must pass before a release.
+check-all: fmt clippy test test-nu
     @echo "🔍 Verifying formatting is clean…"
     cargo fmt --all -- --check
     @echo "✅ All checks passed!"
@@ -116,13 +134,27 @@ check-release: check-all build-release
 
 # ── VHS Demo GIFs ─────────────────────────────────────────────────────────────
 
-GUI_VHS := "crates/weather_man-gui/examples/vhs"
-TUI_VHS := "crates/weather_man-tui/examples/vhs"
-GUI_VHS_GENERATED := "crates/weather_man-gui/examples/vhs/generated"
-TUI_VHS_GENERATED := "crates/weather_man-tui/examples/vhs/generated"
+GUI_VHS := "crates/weatherman-gui/examples/vhs"
+TUI_VHS := "crates/weatherman-tui/examples/vhs"
+CORE_VHS := "crates/weatherman-core/examples/vhs"
+GUI_VHS_GENERATED := "crates/weatherman-gui/examples/vhs/generated"
+TUI_VHS_GENERATED := "crates/weatherman-tui/examples/vhs/generated"
+CORE_VHS_GENERATED := "crates/weatherman-core/examples/vhs/generated"
 
 # Generate all VHS demo GIFs (GUI + TUI)
-vhs-all: vhs-gui vhs-tui
+vhs-all: vhs-core vhs-gui vhs-tui
+
+# Generate the core library demo GIF
+vhs-core: _check-vhs
+    #!/usr/bin/env sh
+    set -e
+    mkdir -p {{ CORE_VHS_GENERATED }}
+    for tape in {{ CORE_VHS }}/*.tape; do
+        [ -f "$tape" ] || continue
+        echo "▶  $tape"
+        vhs "$tape" || echo "❌ Failed: $tape"
+    done
+    echo "✅ Core demos done → {{ CORE_VHS_GENERATED }}/"
 
 # Generate only the GUI demo GIFs
 vhs-gui: _check-vhs
@@ -155,6 +187,8 @@ vhs-tape name: _check-vhs
         vhs "{{ GUI_VHS }}/{{ name }}.tape" && echo "✅ Done."
     elif [ -f "{{ TUI_VHS }}/{{ name }}.tape" ]; then
         vhs "{{ TUI_VHS }}/{{ name }}.tape" && echo "✅ Done."
+    elif [ -f "{{ CORE_VHS }}/{{ name }}.tape" ]; then
+        vhs "{{ CORE_VHS }}/{{ name }}.tape" && echo "✅ Done."
     else
         echo "❌ Tape not found: {{ name }}.tape"; just vhs-list; exit 1
     fi
@@ -167,6 +201,9 @@ vhs-list:
     echo ""
     echo "TUI tapes  →  {{ TUI_VHS }}/"
     ls {{ TUI_VHS }}/*.tape 2>/dev/null | sed 's|.*/||; s|\.tape||' | sed 's/^/  /' || echo "  (none)"
+    echo ""
+    echo "Core tapes →  {{ CORE_VHS }}/"
+    ls {{ CORE_VHS }}/*.tape 2>/dev/null | sed 's|.*/||; s|\.tape||' | sed 's/^/  /' || echo "  (none)"
 
 # ── Documentation ─────────────────────────────────────────────────────────────
 
@@ -203,30 +240,30 @@ check-publish: _check-nu
 
 # Dry-run publish for all three crates (in dependency order)
 publish-dry: check-all
-    cargo publish --dry-run -p weather_man-core
-    cargo publish --dry-run -p weather_man
-    cargo publish --dry-run -p weather_man-tui
+    cargo publish --dry-run -p weatherman-core
+    cargo publish --dry-run -p weatherman
+    cargo publish --dry-run -p weatherman-tui
 
 # Publish all three in dependency order: core → gui → tui.
 publish: check-all publish-core publish-gui publish-tui
-    @echo "✅ weather_man-core, weather_man, and weather_man-tui published!"
+    @echo "✅ weatherman-core, weatherman, and weatherman-tui published!"
 
-# Publish weather_man-core (required by gui and tui)
+# Publish weatherman-core (required by gui and tui)
 publish-core:
-    @echo "📦 Publishing weather_man-core…"
-    cargo publish -p weather_man-core
+    @echo "📦 Publishing weatherman-core…"
+    cargo publish -p weatherman-core
     @echo "⏳ Waiting 30 s for the index to propagate…"
     sleep 30
 
-# Publish weather_man (GUI)
+# Publish weatherman (GUI)
 publish-gui:
-    @echo "📦 Publishing weather_man (GUI)…"
-    cargo publish -p weather_man
+    @echo "📦 Publishing weatherman (GUI)…"
+    cargo publish -p weatherman
 
-# Publish weather_man-tui
+# Publish weatherman-tui
 publish-tui:
-    @echo "📦 Publishing weather_man-tui…"
-    cargo publish -p weather_man-tui
+    @echo "📦 Publishing weatherman-tui…"
+    cargo publish -p weatherman-tui
 
 # ── Housekeeping ──────────────────────────────────────────────────────────────
 

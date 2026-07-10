@@ -1,0 +1,26 @@
+[package]
+name = "weatherman"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "weatherman — desktop weather app (Iced GUI) with current conditions, hourly and 7-day forecast"
+readme = "README.md"
+categories = ["gui", "visualization"]
+keywords = ["weather", "forecast", "gui", "iced", "desktop"]
+
+[[bin]]
+name = "weatherman"
+path = "src/main.rs"
+
+[lib]
+name = "weatherman_gui"
+path = "src/lib.rs"
+
+[dependencies]
+weatherman-core = { workspace = true }
+anyhow  = { workspace = true }
+chrono  = { workspace = true }
+tokio   = { workspace = true }
+iced    = { workspace = true }

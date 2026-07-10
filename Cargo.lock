@@ -4854,18 +4854,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "weather_man"
+name = "weatherman"
 version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
  "iced",
  "tokio",
- "weather_man-core",
+ "weatherman-core",
 ]
 
 [[package]]
-name = "weather_man-core"
+name = "weatherman-core"
 version = "0.3.0"
 dependencies = [
  "anyhow",
@@ -4880,7 +4880,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "weather_man-tui"
+name = "weatherman-tui"
 version = "0.3.0"
 dependencies = [
  "anyhow",
@@ -4890,7 +4890,7 @@ dependencies = [
  "ratatui",
  "serde_json",
  "tokio",
- "weather_man-core",
+ "weatherman-core",
 ]
 
 [[package]]

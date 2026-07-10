@@ -1,0 +1,28 @@
+[package]
+name = "weatherman-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Framework-free weather logic and a drop-in weather API provider (Open-Meteo) — domain models, geocoding, forecasting"
+readme = "README.md"
+categories = ["api-bindings", "command-line-utilities"]
+keywords = ["weather", "forecast", "open-meteo", "api", "geocoding"]
+
+[lib]
+name = "weatherman_core"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow       = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+chrono       = { workspace = true }
+reqwest      = { workspace = true }
+urlencoding  = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

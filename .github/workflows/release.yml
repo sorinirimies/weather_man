@@ -63,16 +63,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build release binaries
-        run: cargo build --release --target ${{ matrix.target }} -p weather_man -p weather_man-tui
+        run: cargo build --release --target ${{ matrix.target }} -p weatherman -p weatherman-tui
 
       - name: Package binaries
         shell: bash
         run: |
           BIN_DIR="target/${{ matrix.target }}/release"
-          PKG="weather_man-${GITHUB_REF_NAME}-${{ matrix.suffix }}"
+          PKG="weatherman-${GITHUB_REF_NAME}-${{ matrix.suffix }}"
           mkdir -p "$PKG"
-          cp "$BIN_DIR/weather_man" "$PKG/" 2>/dev/null || true
-          cp "$BIN_DIR/weather_man-tui" "$PKG/" 2>/dev/null || true
+          cp "$BIN_DIR/weatherman" "$PKG/" 2>/dev/null || true
+          cp "$BIN_DIR/weatherman-tui" "$PKG/" 2>/dev/null || true
           cp README.md LICENSE "$PKG/"
           tar -czvf "$PKG.tar.gz" "$PKG"
 
@@ -90,7 +90,7 @@ jobs:
         with:
           body_path: ${{ runner.os == 'Linux' && 'RELEASE_NOTES.md' || '' }}
           files: |
-            weather_man-*.tar.gz
+            weatherman-*.tar.gz
           token: ${{ secrets.GITHUB_TOKEN }}
 
   # ── Publish to crates.io (core → gui → tui) ───────────────────────────────
@@ -110,8 +110,8 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -e
-          cargo publish -p weather_man-core
-          echo "Waiting for crates.io to index weather_man-core…"
+          cargo publish -p weatherman-core
+          echo "Waiting for crates.io to index weatherman-core…"
           sleep 45
-          cargo publish -p weather_man
-          cargo publish -p weather_man-tui
+          cargo publish -p weatherman
+          cargo publish -p weatherman-tui

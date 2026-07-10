@@ -1,0 +1,127 @@
+//! Application state, messages, and update logic for the Iced GUI.
+
+use iced::Task;
+use weatherman_core::{load_report, ForecastView, WeatherConfig};
+
+/// A successfully loaded, ready-to-render forecast.
+#[derive(Debug, Clone)]
+pub struct Loaded {
+    pub location_name: String,
+    pub view: ForecastView,
+}
+
+/// Messages driving the application.
+#[derive(Debug, Clone)]
+pub enum Message {
+    /// The search text input changed.
+    QueryChanged(String),
+    /// Trigger a fetch for the current query (or auto-detect when empty).
+    Search,
+    /// Toggle between metric and imperial units (re-fetches).
+    ToggleUnits,
+    /// A weather fetch finished.
+    Fetched(Result<Box<Loaded>, String>),
+}
+
+/// Loading status of the current view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Status {
+    Loading,
+    Ready,
+    Error(String),
+}
+
+/// The root application state.
+pub struct App {
+    pub config: WeatherConfig,
+    pub query: String,
+    pub status: Status,
+    pub loaded: Option<Loaded>,
+}
+
+impl App {
+    /// Build the initial state and kick off an auto-detected fetch.
+    pub fn new() -> (Self, Task<Message>) {
+        let config = WeatherConfig::default();
+        let app = Self {
+            config: config.clone(),
+            query: String::new(),
+            status: Status::Loading,
+            loaded: None,
+        };
+        (app, Task::perform(fetch(config, None), Message::Fetched))
+    }
+
+    /// Window title.
+    pub fn title(&self) -> String {
+        match &self.loaded {
+            Some(l) => format!("Weather Man — {}", l.location_name),
+            None => "Weather Man".to_string(),
+        }
+    }
+
+    /// Handle a message and optionally schedule a task.
+    pub fn update(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::QueryChanged(q) => {
+                self.query = q;
+                Task::none()
+            }
+            Message::Search => {
+                self.status = Status::Loading;
+                let query = self.current_query();
+                Task::perform(fetch(self.config.clone(), query), Message::Fetched)
+            }
+            Message::ToggleUnits => {
+                self.config.units = if self.config.units == "imperial" {
+                    "metric".to_string()
+                } else {
+                    "imperial".to_string()
+                };
+                self.status = Status::Loading;
+                let query = self
+                    .current_query()
+                    .or_else(|| self.loaded.as_ref().map(|l| l.location_name.clone()));
+                Task::perform(fetch(self.config.clone(), query), Message::Fetched)
+            }
+            Message::Fetched(Ok(loaded)) => {
+                self.status = Status::Ready;
+                self.loaded = Some(*loaded);
+                Task::none()
+            }
+            Message::Fetched(Err(err)) => {
+                self.status = Status::Error(err);
+                Task::none()
+            }
+        }
+    }
+
+    fn current_query(&self) -> Option<String> {
+        let q = self.query.trim();
+        if q.is_empty() {
+            None
+        } else {
+            Some(q.to_string())
+        }
+    }
+}
+
+/// Fetch weather for an optional named location and build its view-model.
+async fn fetch(config: WeatherConfig, query: Option<String>) -> Result<Box<Loaded>, String> {
+    let report = load_report(&config, query.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let view = ForecastView::build(
+        report.current.as_ref(),
+        &report.hourly,
+        &report.daily,
+        &report.location,
+        &config,
+    );
+
+    Ok(Box::new(Loaded {
+        location_name: report.location.name,
+        view,
+    }))
+}

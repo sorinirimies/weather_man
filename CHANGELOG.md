@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.0] - 2026-07-10
 ### ✨ Features
-- restructure into a Cargo workspace with a shared weather_man-core library **[BREAKING]**
-- add single-page Ratatui TUI (weather_man-tui)
-- add Iced desktop GUI (weather_man)
+- restructure into a Cargo workspace with a shared weatherman-core library **[BREAKING]**
+- add single-page Ratatui TUI (weatherman-tui)
+- add Iced desktop GUI (weatherman)
 ### 🐛 Bug Fixes
 - parse naive Open-Meteo timestamps so hourly forecast populates
 ### 📚 Documentation
