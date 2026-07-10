@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Duration, Timelike, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Timelike, Utc};
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -9,6 +9,21 @@ use crate::types::{
     CurrentWeather, DailyForecast, Forecast, HourlyForecast, Location, WeatherCondition,
     WeatherConfig, WeatherDescription,
 };
+
+/// Parse an Open-Meteo timestamp, which may be RFC 3339 (`...T00:00:00Z`) or a
+/// naive local ISO-8601 value without an offset (`2026-07-10T00:00`) when
+/// `timezone=auto` is used. Returns `None` if neither format matches.
+fn parse_openmeteo_time(s: &str) -> Option<DateTime<Utc>> {
+    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+        return Some(dt.with_timezone(&Utc));
+    }
+    for fmt in ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"] {
+        if let Ok(naive) = NaiveDateTime::parse_from_str(s, fmt) {
+            return Some(naive.and_utc());
+        }
+    }
+    None
+}
 
 /// Open-Meteo base URL (doesn't require API key)
 const OPENMETEO_BASE_URL: &str = "https://api.open-meteo.com/v1";
@@ -161,10 +176,7 @@ impl WeatherForecaster {
         // Parse current weather
         let current = &json["current"];
         let current_time = current["time"].as_str().unwrap_or_default();
-        let timestamp = match DateTime::parse_from_rfc3339(current_time) {
-            Ok(dt) => dt.with_timezone(&Utc),
-            Err(_) => Utc::now(),
-        };
+        let timestamp = parse_openmeteo_time(current_time).unwrap_or_else(Utc::now);
 
         // Parse weather variables
         let temp = current["temperature_2m"].as_f64().unwrap_or(0.0);
@@ -201,17 +213,13 @@ impl WeatherForecaster {
             .and_then(|v| v.as_str())
             .unwrap_or_default();
 
-        let sunrise = match DateTime::parse_from_rfc3339(sunrise_time) {
-            Ok(dt) => dt.with_timezone(&Utc),
-            Err(_) => timestamp, // Fallback to current time
-        };
+        let sunrise = parse_openmeteo_time(sunrise_time).unwrap_or(timestamp);
 
-        let sunset = match DateTime::parse_from_rfc3339(sunset_time) {
-            Ok(dt) => dt.with_timezone(&Utc),
-            Err(_) => timestamp
+        let sunset = parse_openmeteo_time(sunset_time).unwrap_or_else(|| {
+            timestamp
                 .checked_add_signed(Duration::hours(12))
-                .unwrap_or(timestamp), // Fallback to 12 hours later
-        };
+                .unwrap_or(timestamp)
+        });
 
         // Create the CurrentWeather object
         Ok(CurrentWeather {
@@ -281,9 +289,9 @@ impl WeatherForecaster {
         for (i, time) in times.iter().take(48).enumerate() {
             // Limit to 48 hours (2 days)
             let time_str = time.as_str().unwrap_or_default();
-            let timestamp = match DateTime::parse_from_rfc3339(time_str) {
-                Ok(dt) => dt.with_timezone(&Utc),
-                Err(_) => continue, // Skip invalid timestamps
+            let timestamp = match parse_openmeteo_time(time_str) {
+                Some(dt) => dt,
+                None => continue, // Skip invalid timestamps
             };
 
             let temp = temps.get(i).and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -405,15 +413,10 @@ impl WeatherForecaster {
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
 
-            let sunrise = match DateTime::parse_from_rfc3339(sunrise_str) {
-                Ok(dt) => dt.with_timezone(&Utc),
-                Err(_) => date, // Fallback to noon
-            };
+            let sunrise = parse_openmeteo_time(sunrise_str).unwrap_or(date);
 
-            let sunset = match DateTime::parse_from_rfc3339(sunset_str) {
-                Ok(dt) => dt.with_timezone(&Utc),
-                Err(_) => date.checked_add_signed(Duration::hours(12)).unwrap_or(date), // Fallback to 12 hours later
-            };
+            let sunset = parse_openmeteo_time(sunset_str)
+                .unwrap_or_else(|| date.checked_add_signed(Duration::hours(12)).unwrap_or(date));
 
             let weather_code = weather_codes.get(i).and_then(|v| v.as_f64()).unwrap_or(0.0) as u32;
             let max = temp_max.get(i).and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -540,5 +543,36 @@ pub fn weather_description_from_wmo(code: u32, is_day: bool) -> WeatherDescripti
         main: main.to_string(),
         description: description.to_string(),
         icon: icon.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_openmeteo_time;
+    use chrono::Timelike;
+
+    #[test]
+    fn parses_rfc3339_with_offset() {
+        let dt = parse_openmeteo_time("2026-07-10T00:00:00Z").unwrap();
+        assert_eq!(dt.hour(), 0);
+    }
+
+    #[test]
+    fn parses_naive_local_without_offset() {
+        // Open-Meteo returns this shape when timezone=auto.
+        let dt = parse_openmeteo_time("2026-07-10T09:00").unwrap();
+        assert_eq!(dt.hour(), 9);
+    }
+
+    #[test]
+    fn parses_naive_with_seconds() {
+        let dt = parse_openmeteo_time("2026-07-10T09:30:15").unwrap();
+        assert_eq!((dt.hour(), dt.minute()), (9, 30));
+    }
+
+    #[test]
+    fn rejects_garbage() {
+        assert!(parse_openmeteo_time("not-a-date").is_none());
+        assert!(parse_openmeteo_time("").is_none());
     }
 }
