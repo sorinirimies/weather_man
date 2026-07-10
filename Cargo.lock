@@ -5254,7 +5254,7 @@ dependencies = [
 
 [[package]]
 name = "weatherman"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5265,7 +5265,7 @@ dependencies = [
 
 [[package]]
 name = "weatherman-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5280,7 +5280,7 @@ dependencies = [
 
 [[package]]
 name = "weatherman-tui"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "chrono",

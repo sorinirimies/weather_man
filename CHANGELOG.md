@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2] - 2026-07-10
+### 📦 Build
+- update all workspace dependencies
+**Full Changelog**: https://github.com/sorinirimies/weather_man/compare/v0.4.1...v0.4.2
 ## [0.4.1] - 2026-07-10
 ### 📚 Documentation
 - add crates.io GUI and TUI download badges
