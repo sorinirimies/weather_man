@@ -1,0 +1,280 @@
+# weather_man workspace — task runner
+# Install just:      cargo install just
+# Install vhs:       brew install vhs  OR  go install github.com/charmbracelet/vhs@latest
+# Install git-cliff: cargo install git-cliff
+# Install nushell:   cargo install nu
+# Usage: just <task>
+
+# ── Default ───────────────────────────────────────────────────────────────────
+
+default:
+    @just --list
+
+# ── Tool checks ───────────────────────────────────────────────────────────────
+
+_check-git-cliff:
+    @command -v git-cliff >/dev/null 2>&1 || { \
+        echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; \
+    }
+
+_check-nu:
+    @command -v nu >/dev/null 2>&1 || { \
+        echo "❌ nu (nushell) not found. Install: https://www.nushell.sh"; exit 1; \
+    }
+
+_check-vhs:
+    @command -v vhs >/dev/null 2>&1 || { \
+        echo "❌ vhs not found."; \
+        echo "   macOS:      brew install vhs"; \
+        echo "   Any:        go install github.com/charmbracelet/vhs@latest"; \
+        exit 1; \
+    }
+
+# Install all recommended development tools
+install-tools:
+    @echo "Installing development tools…"
+    @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff --locked
+    @command -v nu >/dev/null 2>&1 || cargo install nu --locked
+    @echo "✅ All tools installed!"
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+
+# Build the entire workspace (dev)
+build:
+    cargo build --workspace
+
+# Build only the core library (dev)
+build-core:
+    cargo build -p weather_man-core
+
+# Build only the GUI crate (dev)
+build-gui:
+    cargo build -p weather_man
+
+# Build only the TUI crate (dev)
+build-tui:
+    cargo build -p weather_man-tui
+
+# Build release binaries for GUI and TUI
+build-release:
+    cargo build --release -p weather_man -p weather_man-tui
+
+# ── Run ───────────────────────────────────────────────────────────────────────
+
+# Launch the Iced desktop GUI
+run-gui:
+    cargo run -p weather_man
+
+# Launch the Ratatui terminal UI
+run-tui:
+    cargo run -p weather_man-tui
+
+# Alias: default run launches the GUI
+run: run-gui
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+
+# Run the full workspace test suite
+test:
+    cargo test --workspace --locked --all-features --all-targets
+
+# Test only the core library
+test-core:
+    cargo test -p weather_man-core --all-features
+
+# Test only the TUI crate
+test-tui:
+    cargo test -p weather_man-tui --all-features
+
+# ── Code quality ──────────────────────────────────────────────────────────────
+
+# Check without building
+check:
+    cargo check --workspace
+
+# Format all code
+fmt:
+    cargo fmt --all
+
+# Check formatting without modifying files
+fmt-check:
+    cargo fmt --all -- --check
+
+# Run clippy across the workspace
+clippy:
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# Run all quality checks (format, clippy, test) — must pass before a release.
+check-all: fmt clippy test
+    @echo "🔍 Verifying formatting is clean…"
+    cargo fmt --all -- --check
+    @echo "✅ All checks passed!"
+
+# Full pre-release quality gate — everything in check-all plus a release build.
+check-release: check-all build-release
+    @echo "✅ Release quality gate passed (fmt + clippy + test + release build)!"
+
+# ── VHS Demo GIFs ─────────────────────────────────────────────────────────────
+
+GUI_VHS := "crates/weather_man-gui/examples/vhs"
+TUI_VHS := "crates/weather_man-tui/examples/vhs"
+GUI_VHS_GENERATED := "crates/weather_man-gui/examples/vhs/generated"
+TUI_VHS_GENERATED := "crates/weather_man-tui/examples/vhs/generated"
+
+# Generate all VHS demo GIFs (GUI + TUI)
+vhs-all: vhs-gui vhs-tui
+
+# Generate only the GUI demo GIFs
+vhs-gui: _check-vhs
+    #!/usr/bin/env sh
+    set -e
+    mkdir -p {{ GUI_VHS_GENERATED }}
+    for tape in {{ GUI_VHS }}/*.tape; do
+        [ -f "$tape" ] || continue
+        echo "▶  $tape"
+        vhs "$tape" || echo "❌ Failed: $tape"
+    done
+    echo "✅ GUI demos done → {{ GUI_VHS_GENERATED }}/"
+
+# Generate only the TUI demo GIFs
+vhs-tui: _check-vhs
+    #!/usr/bin/env sh
+    set -e
+    mkdir -p {{ TUI_VHS_GENERATED }}
+    for tape in {{ TUI_VHS }}/*.tape; do
+        [ -f "$tape" ] || continue
+        echo "▶  $tape"
+        vhs "$tape" || echo "❌ Failed: $tape"
+    done
+    echo "✅ TUI demos done → {{ TUI_VHS_GENERATED }}/"
+
+# Render a single tape by name (e.g. just vhs-tape tui-demo)
+vhs-tape name: _check-vhs
+    #!/usr/bin/env sh
+    if [ -f "{{ GUI_VHS }}/{{ name }}.tape" ]; then
+        vhs "{{ GUI_VHS }}/{{ name }}.tape" && echo "✅ Done."
+    elif [ -f "{{ TUI_VHS }}/{{ name }}.tape" ]; then
+        vhs "{{ TUI_VHS }}/{{ name }}.tape" && echo "✅ Done."
+    else
+        echo "❌ Tape not found: {{ name }}.tape"; just vhs-list; exit 1
+    fi
+
+# List all available VHS tapes
+vhs-list:
+    #!/usr/bin/env sh
+    echo "GUI tapes  →  {{ GUI_VHS }}/"
+    ls {{ GUI_VHS }}/*.tape 2>/dev/null | sed 's|.*/||; s|\.tape||' | sed 's/^/  /' || echo "  (none)"
+    echo ""
+    echo "TUI tapes  →  {{ TUI_VHS }}/"
+    ls {{ TUI_VHS }}/*.tape 2>/dev/null | sed 's|.*/||; s|\.tape||' | sed 's/^/  /' || echo "  (none)"
+
+# ── Documentation ─────────────────────────────────────────────────────────────
+
+# Generate docs for the full workspace (no browser)
+doc:
+    cargo doc --no-deps --workspace
+
+# ── Changelog ─────────────────────────────────────────────────────────────────
+
+# Regenerate the full CHANGELOG.md from all tags
+changelog: _check-git-cliff
+    git-cliff --output CHANGELOG.md
+    @echo "✅ CHANGELOG.md updated."
+
+# Preview changelog for the next release without writing the file
+changelog-preview: _check-git-cliff
+    @git-cliff --unreleased
+
+# ── Version bump ─────────────────────────────────────────────────────────────
+
+# Bump the workspace version, regenerate Cargo.lock + CHANGELOG.md, commit and tag.
+bump version: check-release _check-git-cliff _check-nu
+    nu scripts/bump_version.nu --yes {{ version }}
+
+# Show the current workspace version
+version: _check-nu
+    @nu scripts/version.nu
+
+# ── Publish (crates.io) ───────────────────────────────────────────────────────
+
+# Run the full pre-publish readiness check
+check-publish: _check-nu
+    nu scripts/check_publish.nu
+
+# Dry-run publish for all three crates (in dependency order)
+publish-dry: check-all
+    cargo publish --dry-run -p weather_man-core
+    cargo publish --dry-run -p weather_man
+    cargo publish --dry-run -p weather_man-tui
+
+# Publish all three in dependency order: core → gui → tui.
+publish: check-all publish-core publish-gui publish-tui
+    @echo "✅ weather_man-core, weather_man, and weather_man-tui published!"
+
+# Publish weather_man-core (required by gui and tui)
+publish-core:
+    @echo "📦 Publishing weather_man-core…"
+    cargo publish -p weather_man-core
+    @echo "⏳ Waiting 30 s for the index to propagate…"
+    sleep 30
+
+# Publish weather_man (GUI)
+publish-gui:
+    @echo "📦 Publishing weather_man (GUI)…"
+    cargo publish -p weather_man
+
+# Publish weather_man-tui
+publish-tui:
+    @echo "📦 Publishing weather_man-tui…"
+    cargo publish -p weather_man-tui
+
+# ── Housekeeping ──────────────────────────────────────────────────────────────
+
+# Remove build artifacts
+clean:
+    cargo clean
+
+# Update all dependencies (Cargo.lock only)
+update:
+    cargo update
+
+# Upgrade dependencies via cargo-edit and cross-check (nu script)
+upgrade-deps: _check-nu
+    nu scripts/upgrade_deps.nu
+
+# Show outdated dependencies (requires cargo-outdated)
+outdated:
+    cargo outdated
+
+# ── Git remotes & pushing ────────────────────────────────────────────────────
+
+# Show all configured remotes
+remotes:
+    @git remote -v
+
+# Push the current branch to GitHub (origin)
+push:
+    git push origin main
+
+# Pull the current branch from GitHub (origin)
+pull:
+    git pull origin main
+
+# Push all tags to GitHub
+push-tags:
+    git push origin --tags
+
+# ── Release workflow ──────────────────────────────────────────────────────────
+
+# Show what would be released without making any changes
+release-preview: _check-git-cliff _check-nu
+    @echo "Current version: $(nu scripts/version.nu)"
+    @echo ""
+    @echo "Unreleased commits:"
+    @git-cliff --unreleased
+
+# Bump, commit, tag, then push to GitHub — triggers the Release workflow.
+release version: (bump version)
+    @echo "Pushing release v{{ version }} to GitHub…"
+    git push --follow-tags origin main
+    @echo "✅ Release v{{ version }} pushed — Release workflow will trigger automatically."
