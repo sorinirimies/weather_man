@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-07-10
+### 📚 Documentation
+- add crates.io GUI and TUI download badges
+### 🔄 CI
+- install nushell via cargo instead of setup-nu action
+- pin nushell to 0.111.0 for the script test job
+**Full Changelog**: https://github.com/sorinirimies/weather_man/compare/v0.4.0...v0.4.1
 ## [0.4.0] - 2026-07-10
 ### ♻️  Refactor
 - centralize weather presentation logic in core; reuse across GUI and TUI
