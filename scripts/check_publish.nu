@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 # ──────────────────────────────────────────────────────────────────────────────
-# weather_man — Pre-publish checks
+# weatherman — Pre-publish checks
 # ──────────────────────────────────────────────────────────────────────────────
 # Runs documentation checks, a dry-run publish for the core crate, clippy and
 # tests before an actual `cargo publish`.
@@ -8,14 +8,20 @@
 # Usage: nu scripts/check_publish.nu
 # ──────────────────────────────────────────────────────────────────────────────
 
+# The order crates must be published in (dependencies first). Exported so tests
+# and other scripts share one source of truth.
+export def publish_order []: nothing -> list<string> {
+    ["weatherman-core" "weatherman" "weatherman-tui"]
+}
+
 def main [] {
     print "══════════════════════════════════════════════════════════"
-    print "  weather_man — Pre-publish checks"
+    print "  weatherman — Pre-publish checks"
     print "══════════════════════════════════════════════════════════"
     print ""
 
     print "── Step 1: Documentation checks ──"
-    let doc_crates = ["weather_man-core" "weather_man" "weather_man-tui"]
+    let doc_crates = (publish_order)
     for crate in $doc_crates {
         print $"  📖 Checking docs for ($crate)..."
         let result = (do { cargo doc -p $crate --no-deps } | complete)
@@ -28,14 +34,14 @@ def main [] {
     }
     print ""
 
-    print "── Step 2: Publish dry-run (weather_man-core) ──"
-    let publish_result = (do { cargo publish --dry-run -p weather_man-core } | complete)
+    print "── Step 2: Publish dry-run (weatherman-core) ──"
+    let publish_result = (do { cargo publish --dry-run -p weatherman-core } | complete)
     if $publish_result.exit_code != 0 {
-        print "  ❌ Publish dry-run failed for weather_man-core:"
+        print "  ❌ Publish dry-run failed for weatherman-core:"
         print $publish_result.stderr
         exit 1
     }
-    print "  ✅ weather_man-core publish dry-run OK"
+    print "  ✅ weatherman-core publish dry-run OK"
     print ""
 
     print "── Step 3: Cargo clippy (workspace) ──"
@@ -62,8 +68,8 @@ def main [] {
     print "  ✅ All pre-publish checks passed!"
     print ""
     print "  Publish order (wait ~30s between each for crates.io indexing):"
-    print "    1. cargo publish -p weather_man-core"
-    print "    2. cargo publish -p weather_man"
-    print "    3. cargo publish -p weather_man-tui"
+    print "    1. cargo publish -p weatherman-core"
+    print "    2. cargo publish -p weatherman"
+    print "    3. cargo publish -p weatherman-tui"
     print "══════════════════════════════════════════════════════════"
 }

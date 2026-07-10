@@ -1,5 +1,5 @@
 #!/usr/bin/env nu
-# ─── weather_man · Dependency Upgrade Script ───────────────────────────────────
+# ─── weatherman · Dependency Upgrade Script ───────────────────────────────────
 # Upgrades workspace dependencies using cargo-edit, then cross-checks everything.
 #
 # Prerequisites: cargo install cargo-edit
@@ -14,8 +14,27 @@ def step   [msg: string] { print $"  (ansi green_bold)▶(ansi reset) ($msg)" }
 def err    [msg: string] { print $"  (ansi red_bold)✖(ansi reset) ($msg)" }
 def ok     [msg: string] { print $"  (ansi green)✔(ansi reset) ($msg)" }
 
+# ── Pure helpers (exported for testing) ────────────────────────────────────────
+
+# Return the commit message for the given dirty state, or "" when nothing needs
+# committing.
+export def commit_label [toml_dirty: bool, lock_dirty: bool, date: string]: nothing -> string {
+    if $toml_dirty {
+        $"chore: upgrade dependencies ($date)"
+    } else if $lock_dirty {
+        $"chore: update Cargo.lock ($date)"
+    } else {
+        ""
+    }
+}
+
+# Return true when every element of a bool list is true.
+export def all_passed [results: list<bool>]: nothing -> bool {
+    $results | all { |x| $x }
+}
+
 def preflight [] {
-    header "weather_man · Pre-flight Checks"
+    header "weatherman · Pre-flight Checks"
     if not ("Cargo.toml" | path exists) {
         err "No Cargo.toml found — run this script from the workspace root."
         exit 1
@@ -29,7 +48,7 @@ def preflight [] {
 }
 
 def list_outdated [] {
-    header "weather_man · Outdated Dependencies (dry-run)"
+    header "weatherman · Outdated Dependencies (dry-run)"
     step "Running `cargo upgrade --dry-run` …"
     let result = (do { cargo upgrade --workspace --dry-run } | complete)
     print $result.stdout
@@ -37,7 +56,7 @@ def list_outdated [] {
 }
 
 def do_upgrade [] {
-    header "weather_man · Upgrading Dependencies"
+    header "weatherman · Upgrading Dependencies"
     step "Running `cargo upgrade --workspace` …"
     let result = (do { cargo upgrade --workspace } | complete)
     print $result.stdout
@@ -59,7 +78,7 @@ def do_upgrade [] {
 }
 
 def cross_check [] {
-    header "weather_man · Cross-checks"
+    header "weatherman · Cross-checks"
 
     step "cargo check --workspace …"
     let chk = (do { cargo check --workspace } | complete)
@@ -76,10 +95,10 @@ def cross_check [] {
     if $tst.exit_code != 0 { err "tests failed:"; print $tst.stderr; exit 1 }
     ok "all tests pass"
 
-    step "cargo doc --no-deps -p weather_man-core …"
-    let doc = (do { cargo doc --no-deps -p weather_man-core } | complete)
+    step "cargo doc --no-deps -p weatherman-core …"
+    let doc = (do { cargo doc --no-deps -p weatherman-core } | complete)
     if $doc.exit_code != 0 { err "doc generation failed:"; print $doc.stderr; exit 1 }
-    ok "docs build cleanly for weather_man-core"
+    ok "docs build cleanly for weatherman-core"
 }
 
 def main [--check (-c)] {
@@ -91,7 +110,7 @@ def main [--check (-c)] {
         list_outdated
         do_upgrade
         cross_check
-        header "weather_man · Done"
+        header "weatherman · Done"
         ok "All dependencies upgraded and cross-checked."
         print ""
         print "  Next steps:"

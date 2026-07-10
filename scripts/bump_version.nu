@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 # ──────────────────────────────────────────────────────────────────────────────
-# weather_man — Bump workspace version
+# weatherman — Bump workspace version
 # ──────────────────────────────────────────────────────────────────────────────
 # Usage:
 #   nu scripts/bump_version.nu [--yes] <new_version>
@@ -8,39 +8,56 @@
 # What it does:
 #   1. Validates the supplied semantic version string.
 #   2. Updates `workspace.package.version` in the root Cargo.toml.
-#   3. Updates the `weather_man-core` dependency version.
+#   3. Updates the `weatherman-core` dependency version.
 #   4. Runs `cargo fmt`, `cargo clippy`, and `cargo test`.
 #   5. Refreshes Cargo.lock and CHANGELOG.md (git-cliff, if installed).
 #   6. Creates a Git commit and an annotated tag.
 # ──────────────────────────────────────────────────────────────────────────────
 
 def validate_version [version: string] {
-    let pattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$'
-    if ($version | find --regex $pattern | is-empty) {
+    if not (is_valid_version $version) {
         print $"(ansi red)Error:(ansi reset) '($version)' is not a valid semantic version."
         exit 1
     }
 }
 
+# ── Pure helpers (exported for testing) ───────────────────────────────────────
+
+# Return true when the string is a valid MAJOR.MINOR.PATCH(-prerelease) semver.
+export def is_valid_version [version: string]: nothing -> bool {
+    let pattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$'
+    ($version | find --regex $pattern | is-not-empty)
+}
+
+# Replace the workspace.package.version in a Cargo.toml string. Pure transform.
+export def set_workspace_version [cargo: string, version: string]: nothing -> string {
+    $cargo | str replace --regex 'version\s*=\s*"[^"]+"' $'version    = "($version)"'
+}
+
+# Replace the weatherman-core dependency version in a Cargo.toml string. Pure.
+export def set_core_dep_version [cargo: string, version: string]: nothing -> string {
+    $cargo
+    | lines
+    | each {|line|
+        if ($line | find --regex '^weatherman-core\s*=' | is-not-empty) {
+            $line | str replace --regex 'version\s*=\s*"[^"]+"' $'version = "($version)"'
+        } else {
+            $line
+        }
+    }
+    | str join "\n"
+}
+
 def update_workspace_version [version: string] {
     let cargo = (open Cargo.toml --raw)
-    let updated = ($cargo | str replace --regex 'version\s*=\s*"[^"]+"' $'version    = "($version)"')
-    $updated | save --force Cargo.toml
+    set_workspace_version $cargo $version | save --force Cargo.toml
     print $"(ansi green)✓(ansi reset) Updated workspace.package.version → ($version)"
 }
 
 def update_core_dep_version [version: string] {
     let cargo = (open Cargo.toml --raw)
-    let lines = ($cargo | lines)
-    let updated_lines = ($lines | each {|line|
-        if ($line | find --regex '^weather_man-core\s*=' | is-not-empty) {
-            $line | str replace --regex 'version\s*=\s*"[^"]+"' $'version = "($version)"'
-        } else {
-            $line
-        }
-    })
-    $updated_lines | str join "\n" | save --force Cargo.toml
-    print $"(ansi green)✓(ansi reset) Updated weather_man-core dependency → ($version)"
+    set_core_dep_version $cargo $version | save --force Cargo.toml
+    print $"(ansi green)✓(ansi reset) Updated weatherman-core dependency → ($version)"
 }
 
 def main [
@@ -49,7 +66,7 @@ def main [
 ] {
     print ""
     print $"(ansi cyan)══════════════════════════════════════════════════════════════(ansi reset)"
-    print $"(ansi cyan)  weather_man — Bump Version(ansi reset)"
+    print $"(ansi cyan)  weatherman — Bump Version(ansi reset)"
     print $"(ansi cyan)══════════════════════════════════════════════════════════════(ansi reset)"
     print ""
 
@@ -83,7 +100,7 @@ def main [
 
     print ""
     print $"(ansi cyan)── cargo update ────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "update" "-p" "weather_man-core" "-p" "weather_man" "-p" "weather_man-tui"
+    run-external "cargo" "update" "-p" "weatherman-core" "-p" "weatherman" "-p" "weatherman-tui"
 
     print ""
     print $"(ansi cyan)── changelog ───────────────────────────────────────────────(ansi reset)"
@@ -102,7 +119,7 @@ def main [
     print $"(ansi green)✓(ansi reset) Committed and tagged v($new_version)."
 
     print ""
-    print $"(ansi green)  weather_man version bumped to ($new_version) 🚀(ansi reset)"
+    print $"(ansi green)  weatherman version bumped to ($new_version) 🚀(ansi reset)"
     print "  Next: git push --follow-tags origin main"
     print ""
 }
