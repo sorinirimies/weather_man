@@ -253,6 +253,73 @@ pub struct Forecast {
     pub units: String,
 }
 
+/// A snapshot of "right now" weather, implemented by both [`CurrentWeather`]
+/// and [`HourlyForecast`] so presentation code can treat them uniformly.
+pub trait CurrentConditions {
+    /// Observation timestamp (UTC).
+    fn observed_at(&self) -> DateTime<Utc>;
+    /// Air temperature in the configured units.
+    fn temperature(&self) -> f64;
+    /// "Feels like" temperature in the configured units.
+    fn feels_like(&self) -> f64;
+    /// Relative humidity as a percentage.
+    fn humidity(&self) -> u8;
+    /// Wind speed in the configured units.
+    fn wind_speed(&self) -> f64;
+    /// Wind bearing in degrees.
+    fn wind_direction(&self) -> u16;
+    /// The dominant weather condition.
+    fn condition(&self) -> WeatherCondition;
+}
+
+impl CurrentConditions for CurrentWeather {
+    fn observed_at(&self) -> DateTime<Utc> {
+        self.timestamp
+    }
+    fn temperature(&self) -> f64 {
+        self.temperature
+    }
+    fn feels_like(&self) -> f64 {
+        self.feels_like
+    }
+    fn humidity(&self) -> u8 {
+        self.humidity
+    }
+    fn wind_speed(&self) -> f64 {
+        self.wind_speed
+    }
+    fn wind_direction(&self) -> u16 {
+        self.wind_direction
+    }
+    fn condition(&self) -> WeatherCondition {
+        self.main_condition
+    }
+}
+
+impl CurrentConditions for HourlyForecast {
+    fn observed_at(&self) -> DateTime<Utc> {
+        self.timestamp
+    }
+    fn temperature(&self) -> f64 {
+        self.temperature
+    }
+    fn feels_like(&self) -> f64 {
+        self.feels_like
+    }
+    fn humidity(&self) -> u8 {
+        self.humidity
+    }
+    fn wind_speed(&self) -> f64 {
+        self.wind_speed
+    }
+    fn wind_direction(&self) -> u16 {
+        self.wind_direction
+    }
+    fn condition(&self) -> WeatherCondition {
+        self.main_condition
+    }
+}
+
 /// Represents air quality data
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]

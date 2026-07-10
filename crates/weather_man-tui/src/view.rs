@@ -8,25 +8,22 @@ use ratatui::{
     Frame,
 };
 use weather_man_core::{
-    condition_tone, convert_to_local, day_label, pop_percent, temp_unit_label, weekday_name,
-    wind_direction_label, wind_unit_label, ConditionTone, DailyForecast, HourlyForecast, Location,
-    WeatherCondition, WeatherConfig,
+    temp_unit_label, tone_color_fn, CurrentView, DayRow, ForecastView, HourRow, Location,
+    WeatherConfig,
 };
 
-use chrono::Timelike;
-
-/// Map a semantic condition tone to a ratatui colour.
-pub fn tone_color(condition: &WeatherCondition) -> Color {
-    match condition_tone(condition) {
-        ConditionTone::Sunny => Color::Yellow,
-        ConditionTone::Cloudy => Color::Gray,
-        ConditionTone::Wet => Color::Blue,
-        ConditionTone::Storm => Color::Magenta,
-        ConditionTone::Snow => Color::White,
-        ConditionTone::Fog => Color::DarkGray,
-        ConditionTone::Neutral => Color::Gray,
+tone_color_fn!(
+    /// Map a weather condition tone to a ratatui colour.
+    pub fn tone_color -> Color {
+        sunny:   Color::Yellow,
+        cloudy:  Color::Gray,
+        wet:     Color::Blue,
+        storm:   Color::Magenta,
+        snow:    Color::White,
+        fog:     Color::DarkGray,
+        neutral: Color::Gray,
     }
-}
+);
 
 fn section_header<'a>(title: &str) -> Line<'a> {
     Line::from(Span::styled(
@@ -37,179 +34,132 @@ fn section_header<'a>(title: &str) -> Line<'a> {
     ))
 }
 
-/// Build the current-conditions section from the first hourly entry.
-pub fn build_current_section<'a>(
-    hourly: &[HourlyForecast],
-    location: &Location,
-    config: &WeatherConfig,
-) -> Vec<Line<'a>> {
+fn missing<'a>(msg: &str) -> Line<'a> {
+    Line::from(Span::styled(
+        msg.to_string(),
+        Style::default().fg(Color::Red),
+    ))
+}
+
+/// Build the current-conditions section from a pre-computed view.
+pub fn current_lines<'a>(current: Option<&CurrentView>) -> Vec<Line<'a>> {
     let mut lines = vec![section_header("🌡  Current Conditions")];
 
-    let Some(current) = hourly.first() else {
-        lines.push(Line::from(Span::styled(
-            "No current weather data available.",
-            Style::default().fg(Color::Red),
-        )));
+    let Some(c) = current else {
+        lines.push(missing("No current weather data available."));
         return lines;
     };
 
-    let temp_unit = temp_unit_label(&config.units);
-    let wind_unit = wind_unit_label(&config.units);
-    let local = convert_to_local(&current.timestamp, &location.timezone);
-
     lines.push(Line::from(vec![
-        Span::raw(format!("{} ", current.main_condition.get_emoji())),
-        Span::styled(
-            current.main_condition.to_string(),
-            Style::default().fg(tone_color(&current.main_condition)),
-        ),
+        Span::raw(format!("{} ", c.emoji)),
+        Span::styled(c.condition.clone(), Style::default().fg(tone_color(c.tone))),
         Span::raw("   "),
         Span::styled(
-            format!("{:.1}{}", current.temperature, temp_unit),
+            c.temperature.clone(),
             Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(format!("  (feels {:.1}{})", current.feels_like, temp_unit)),
+        Span::raw(format!("  (feels {})", c.feels_like)),
     ]));
 
     lines.push(Line::from(vec![
         Span::styled("Local time: ", Style::default().fg(Color::Gray)),
-        Span::raw(format!("{:02}:{:02}", local.hour(), local.minute())),
+        Span::raw(c.local_time.clone()),
         Span::raw("   "),
         Span::styled("Humidity: ", Style::default().fg(Color::Gray)),
-        Span::raw(format!("{}%", current.humidity)),
+        Span::raw(c.humidity.clone()),
         Span::raw("   "),
         Span::styled("Wind: ", Style::default().fg(Color::Gray)),
-        Span::raw(format!(
-            "{:.1} {} {}",
-            current.wind_speed,
-            wind_unit,
-            wind_direction_label(current.wind_direction)
-        )),
+        Span::raw(c.wind.clone()),
     ]));
 
     lines
 }
 
-/// Build the next-24-hours section.
-pub fn build_hourly_section<'a>(
-    hourly: &[HourlyForecast],
-    location: &Location,
-    config: &WeatherConfig,
-) -> Vec<Line<'a>> {
+/// Build the next-24-hours section from pre-computed rows.
+pub fn hourly_lines<'a>(hours: &[HourRow]) -> Vec<Line<'a>> {
     let mut lines = vec![section_header("🕓  Next 24 Hours")];
 
-    if hourly.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "No hourly forecast data available.",
-            Style::default().fg(Color::Red),
-        )));
+    if hours.is_empty() {
+        lines.push(missing("No hourly forecast data available."));
         return lines;
     }
 
-    let temp_unit = temp_unit_label(&config.units);
-
-    for hour in hourly.iter().take(24) {
-        let local = convert_to_local(&hour.timestamp, &location.timezone);
-        let pop = pop_percent(hour.pop);
-
+    for h in hours {
         lines.push(Line::from(vec![
+            Span::styled(format!("{}  ", h.time), Style::default().fg(Color::Cyan)),
+            Span::raw(format!("{} ", h.emoji)),
             Span::styled(
-                format!("{:02}:00  ", local.hour()),
-                Style::default().fg(Color::Cyan),
-            ),
-            Span::raw(format!("{} ", hour.main_condition.get_emoji())),
-            Span::styled(
-                format!("{:>5.1}{}", hour.temperature, temp_unit),
+                format!("{:>7}", h.temperature),
                 Style::default().fg(Color::White),
             ),
             Span::raw("   "),
-            Span::styled(format!("💧 {:>3}%", pop), Style::default().fg(Color::Blue)),
-            Span::raw("   "),
             Span::styled(
-                hour.main_condition.to_string(),
-                Style::default().fg(tone_color(&hour.main_condition)),
+                format!("💧 {:>3}%", h.pop_percent),
+                Style::default().fg(Color::Blue),
             ),
+            Span::raw("   "),
+            Span::styled(h.condition.clone(), Style::default().fg(tone_color(h.tone))),
         ]));
     }
 
     lines
 }
 
-/// Build the 7-day forecast section.
-pub fn build_daily_section<'a>(
-    daily: &[DailyForecast],
-    location: &Location,
-    config: &WeatherConfig,
-) -> Vec<Line<'a>> {
+/// Build the 7-day forecast section from pre-computed rows.
+pub fn daily_lines<'a>(days: &[DayRow]) -> Vec<Line<'a>> {
     let mut lines = vec![section_header("📅  7-Day Forecast")];
 
-    if daily.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "No daily forecast data available.",
-            Style::default().fg(Color::Red),
-        )));
+    if days.is_empty() {
+        lines.push(missing("No daily forecast data available."));
         return lines;
     }
 
-    let temp_unit = temp_unit_label(&config.units);
-
-    for (i, day) in daily.iter().take(7).enumerate() {
-        let local = convert_to_local(&day.date, &location.timezone);
-        let label = day_label(i, weekday_name(&local));
-        let date_str = local.format("%m/%d").to_string();
-        let pop = pop_percent(day.pop);
-
+    for d in days {
         lines.push(Line::from(vec![
             Span::styled(
-                format!("{:<10}", label),
+                format!("{:<10}", d.label),
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!("{:<6}", date_str), Style::default().fg(Color::Gray)),
-            Span::raw(format!("{} ", day.main_condition.get_emoji())),
+            Span::styled(format!("{:<6}", d.date), Style::default().fg(Color::Gray)),
+            Span::raw(format!("{} ", d.emoji)),
             Span::styled(
-                format!("{:<13}", day.main_condition.to_string()),
-                Style::default().fg(tone_color(&day.main_condition)),
+                format!("{:<13}", d.condition),
+                Style::default().fg(tone_color(d.tone)),
             ),
             Span::styled(
-                format!(
-                    "{:>3.0}{} / {:>3.0}{}",
-                    day.temp_max, temp_unit, day.temp_min, temp_unit
-                ),
+                format!("{:>13}", d.temp_high_low),
                 Style::default().fg(Color::White),
             ),
             Span::raw("   "),
-            Span::styled(format!("💧 {:>3}%", pop), Style::default().fg(Color::Blue)),
+            Span::styled(
+                format!("💧 {:>3}%", d.pop_percent),
+                Style::default().fg(Color::Blue),
+            ),
         ]));
     }
 
     lines
 }
 
-/// Assemble the whole scrollable page.
-pub fn build_page<'a>(
-    hourly: &[HourlyForecast],
-    daily: &[DailyForecast],
-    location: &Location,
-    config: &WeatherConfig,
-) -> Text<'a> {
+/// Assemble the whole scrollable page from a forecast view-model.
+pub fn build_page<'a>(view: &ForecastView) -> Text<'a> {
     let mut lines: Vec<Line> = Vec::new();
-    lines.extend(build_current_section(hourly, location, config));
+    lines.extend(current_lines(view.current.as_ref()));
     lines.push(Line::from(""));
-    lines.extend(build_hourly_section(hourly, location, config));
+    lines.extend(hourly_lines(&view.hours));
     lines.push(Line::from(""));
-    lines.extend(build_daily_section(daily, location, config));
+    lines.extend(daily_lines(&view.days));
     Text::from(lines)
 }
 
 /// Render the full frame: title, scrollable body, help bar.
 pub fn render(
     f: &mut Frame,
-    hourly: &[HourlyForecast],
-    daily: &[DailyForecast],
+    view: &ForecastView,
     location: &Location,
     config: &WeatherConfig,
     scroll: u16,
@@ -229,7 +179,7 @@ pub fn render(
 
     render_title(f, chunks[0], location, config);
 
-    let body = Paragraph::new(build_page(hourly, daily, location, config))
+    let body = Paragraph::new(build_page(view))
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -294,11 +244,6 @@ fn render_help(f: &mut Frame, area: Rect) {
 }
 
 /// Total number of content lines (used to clamp scrolling).
-pub fn page_line_count(
-    hourly: &[HourlyForecast],
-    daily: &[DailyForecast],
-    location: &Location,
-    config: &WeatherConfig,
-) -> u16 {
-    build_page(hourly, daily, location, config).lines.len() as u16
+pub fn page_line_count(view: &ForecastView) -> u16 {
+    build_page(view).lines.len() as u16
 }

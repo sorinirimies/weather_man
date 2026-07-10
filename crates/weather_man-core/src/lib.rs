@@ -8,6 +8,8 @@
 //! | [`types`] | Domain models — conditions, locations, current/hourly/daily forecasts, config |
 //! | [`forecaster`] | [`WeatherProvider`] trait + Open-Meteo implementation ([`WeatherForecaster`]) |
 //! | [`location`] | IP + name geocoding ([`LocationService`]) |
+//! | [`api`] | One-call orchestration ([`load_report`]) returning a [`WeatherReport`] |
+//! | [`presentation`] | UI-agnostic view-model ([`ForecastView`]) + the [`tone_color_fn!`] macro |
 //! | [`format`] | UI-agnostic formatting helpers (units, wind, tones, local time) |
 //!
 //! This crate has NO GUI or TUI dependencies.
@@ -15,23 +17,31 @@
 //! ## Quick start
 //!
 //! ```no_run
-//! use weather_man_core::{LocationService, WeatherForecaster, WeatherProvider, WeatherConfig};
+//! use weather_man_core::{load_report, ForecastView, WeatherConfig};
 //!
 //! # async fn run() -> anyhow::Result<()> {
-//! let location = LocationService::new().get_location_by_name("Berlin").await?;
-//! let provider = WeatherForecaster::new(WeatherConfig::default());
-//! let forecast = provider.forecast(&location).await?;
-//! println!("{} days", forecast.daily.len());
+//! let report = load_report(&WeatherConfig::default(), Some("Berlin")).await?;
+//! let view = ForecastView::build(
+//!     report.current.as_ref(),
+//!     &report.hourly,
+//!     &report.daily,
+//!     &report.location,
+//!     &WeatherConfig::default(),
+//! );
+//! println!("{} days ready to render", view.days.len());
 //! # Ok(())
 //! # }
 //! ```
 
+pub mod api;
 pub mod forecaster;
 pub mod format;
 pub mod location;
+pub mod presentation;
 pub mod types;
 
 // Convenience re-exports — the public surface most consumers need.
+pub use api::{load_report, resolve_location, WeatherReport};
 pub use forecaster::{
     weather_description_from_wmo, wmo_code_to_condition, WeatherForecaster, WeatherProvider,
 };
@@ -41,7 +51,8 @@ pub use format::{
     wind_unit_label, ConditionTone,
 };
 pub use location::LocationService;
+pub use presentation::{CurrentView, DayRow, ForecastView, HourRow, DAILY_LIMIT, HOURLY_LIMIT};
 pub use types::{
-    CurrentWeather, DailyForecast, DetailLevel, Forecast, HourlyForecast, Location,
-    WeatherCondition, WeatherConfig, WeatherDescription,
+    CurrentConditions, CurrentWeather, DailyForecast, DetailLevel, Forecast, HourlyForecast,
+    Location, WeatherCondition, WeatherConfig, WeatherDescription,
 };

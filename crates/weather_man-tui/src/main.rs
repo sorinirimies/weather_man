@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use weather_man_core::{LocationService, WeatherConfig, WeatherForecaster, WeatherProvider};
+use weather_man_core::{load_report, Forecast, WeatherConfig};
 use weather_man_tui::WeatherTui;
 
 #[derive(Parser)]
@@ -37,21 +37,21 @@ async fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let location_service = LocationService::new();
-    let location = match &cli.location {
-        Some(name) => location_service.get_location_by_name(name).await?,
-        None => location_service.get_location_from_ip().await?,
-    };
-
-    let forecaster = WeatherForecaster::new(config.clone());
-    let forecast = forecaster.forecast(&location).await?;
+    let report = load_report(&config, cli.location.as_deref()).await?;
 
     if cli.json {
+        let forecast = Forecast {
+            current: report.current,
+            hourly: report.hourly,
+            daily: report.daily,
+            timezone_offset: 0,
+            units: config.units.clone(),
+        };
         println!("{}", serde_json::to_string_pretty(&forecast)?);
         return Ok(());
     }
 
-    let mut tui = WeatherTui::new(forecast.hourly, forecast.daily, location, config)?;
+    let mut tui = WeatherTui::new(report, config)?;
     tui.run()?;
     Ok(())
 }

@@ -1,23 +1,24 @@
 use chrono::{Duration, Utc};
 use weather_man_core::{
-    DailyForecast, HourlyForecast, Location, WeatherCondition, WeatherConfig, WeatherDescription,
+    ConditionTone, DailyForecast, ForecastView, HourlyForecast, Location, WeatherCondition,
+    WeatherConfig, WeatherDescription,
 };
 use weather_man_tui::view;
 
-fn sample_location() -> Location {
+fn location() -> Location {
     Location {
-        name: "Testville".to_string(),
-        country: "Testland".to_string(),
-        country_code: "TL".to_string(),
+        name: "Testville".into(),
+        country: "Testland".into(),
+        country_code: "TL".into(),
         latitude: 0.0,
         longitude: 0.0,
-        timezone: "UTC".to_string(),
+        timezone: "UTC".into(),
         region: None,
         state: None,
     }
 }
 
-fn sample_hourly(n: usize) -> Vec<HourlyForecast> {
+fn hourly(n: usize) -> Vec<HourlyForecast> {
     let base = Utc::now();
     (0..n)
         .map(|i| HourlyForecast {
@@ -44,7 +45,7 @@ fn sample_hourly(n: usize) -> Vec<HourlyForecast> {
         .collect()
 }
 
-fn sample_daily(n: usize) -> Vec<DailyForecast> {
+fn daily(n: usize) -> Vec<DailyForecast> {
     let base = Utc::now();
     (0..n)
         .map(|i| DailyForecast {
@@ -74,53 +75,58 @@ fn sample_daily(n: usize) -> Vec<DailyForecast> {
         .collect()
 }
 
+fn build_view(nh: usize, nd: usize) -> ForecastView {
+    ForecastView::build(
+        None::<&HourlyForecast>,
+        &hourly(nh),
+        &daily(nd),
+        &location(),
+        &WeatherConfig::default(),
+    )
+}
+
 #[test]
-fn tone_color_is_stable() {
-    // Same condition should always map to the same colour.
+fn tone_color_is_stable_and_distinct() {
     assert_eq!(
-        view::tone_color(&WeatherCondition::Clear),
-        view::tone_color(&WeatherCondition::Clear)
+        view::tone_color(ConditionTone::Sunny),
+        view::tone_color(ConditionTone::Sunny)
     );
     assert_ne!(
-        view::tone_color(&WeatherCondition::Clear),
-        view::tone_color(&WeatherCondition::Rain)
+        view::tone_color(ConditionTone::Sunny),
+        view::tone_color(ConditionTone::Wet)
     );
 }
 
 #[test]
-fn current_section_has_header_and_data() {
-    let cfg = WeatherConfig::default();
-    let lines = view::build_current_section(&sample_hourly(3), &sample_location(), &cfg);
-    // header + two info lines
-    assert_eq!(lines.len(), 3);
+fn current_lines_has_header_and_data() {
+    let v = build_view(3, 0);
+    let lines = view::current_lines(v.current.as_ref());
+    assert_eq!(lines.len(), 3); // header + two info lines
 }
 
 #[test]
-fn current_section_handles_empty() {
-    let cfg = WeatherConfig::default();
-    let lines = view::build_current_section(&[], &sample_location(), &cfg);
+fn current_lines_handles_missing() {
+    let lines = view::current_lines(None);
     assert_eq!(lines.len(), 2); // header + "no data"
 }
 
 #[test]
-fn hourly_section_caps_at_24() {
-    let cfg = WeatherConfig::default();
-    let lines = view::build_hourly_section(&sample_hourly(48), &sample_location(), &cfg);
+fn hourly_lines_caps_at_24() {
+    let v = build_view(48, 0);
+    let lines = view::hourly_lines(&v.hours);
     assert_eq!(lines.len(), 25); // header + 24 rows
 }
 
 #[test]
-fn daily_section_caps_at_7() {
-    let cfg = WeatherConfig::default();
-    let lines = view::build_daily_section(&sample_daily(10), &sample_location(), &cfg);
+fn daily_lines_caps_at_7() {
+    let v = build_view(0, 10);
+    let lines = view::daily_lines(&v.days);
     assert_eq!(lines.len(), 8); // header + 7 rows
 }
 
 #[test]
 fn page_line_count_sums_sections() {
-    let cfg = WeatherConfig::default();
-    let loc = sample_location();
-    let count = view::page_line_count(&sample_hourly(24), &sample_daily(7), &loc, &cfg);
+    let v = build_view(24, 7);
     // current(3) + blank(1) + hourly(25) + blank(1) + daily(8) = 38
-    assert_eq!(count, 38);
+    assert_eq!(view::page_line_count(&v), 38);
 }

@@ -1,22 +1,17 @@
 //! View rendering for the Iced GUI.
 
 use crate::app::{App, Loaded, Message, Status};
-use crate::theme::{condition_color, ACCENT, MUTED};
+use crate::theme::{tone_color, ACCENT, MUTED};
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Alignment, Element, Length};
-use weather_man_core::{
-    convert_to_local, day_label, pop_percent, temp_unit_label, weekday_name, wind_direction_label,
-    wind_unit_label, DailyForecast, HourlyForecast, Location, WeatherConfig,
-};
-
-use chrono::Timelike;
+use weather_man_core::{CurrentView, DayRow, ForecastView, HourRow};
 
 /// Top-level view.
 pub fn view(app: &App) -> Element<'_, Message> {
     let body: Element<Message> = match (&app.status, &app.loaded) {
         (Status::Error(err), _) => error_view(err),
         (Status::Loading, None) => centered("Loading weather…"),
-        (_, Some(loaded)) => loaded_view(loaded, &app.config),
+        (_, Some(loaded)) => loaded_view(loaded),
         (_, None) => centered("No data"),
     };
 
@@ -51,63 +46,46 @@ fn search_bar(app: &App) -> Element<'_, Message> {
     .into()
 }
 
-fn loaded_view<'a>(loaded: &'a Loaded, config: &'a WeatherConfig) -> Element<'a, Message> {
-    scrollable(
-        column![
-            current_card(loaded, config),
-            section_title("Next 24 Hours"),
-            hourly_strip(&loaded.hourly, &loaded.location, config),
-            section_title("7-Day Forecast"),
-            daily_list(&loaded.daily, &loaded.location, config),
-        ]
-        .spacing(16),
-    )
-    .height(Length::Fill)
-    .into()
+fn loaded_view(loaded: &Loaded) -> Element<'_, Message> {
+    let ForecastView {
+        current,
+        hours,
+        days,
+    } = &loaded.view;
+
+    let mut col = column![].spacing(16);
+
+    if let Some(c) = current {
+        col = col.push(current_card(c));
+    }
+    col = col
+        .push(section_title("Next 24 Hours"))
+        .push(hourly_strip(hours))
+        .push(section_title("7-Day Forecast"))
+        .push(daily_list(days));
+
+    scrollable(col).height(Length::Fill).into()
 }
 
-fn current_card<'a>(loaded: &'a Loaded, config: &'a WeatherConfig) -> Element<'a, Message> {
-    let c = &loaded.current;
-    let temp_unit = temp_unit_label(&config.units);
-    let wind_unit = wind_unit_label(&config.units);
-    let local = convert_to_local(&c.timestamp, &loaded.location.timezone);
-
+fn current_card(c: &CurrentView) -> Element<'_, Message> {
     let content = column![
         row![
-            text(c.main_condition.get_emoji()).size(48),
+            text(c.emoji).size(48),
             column![
-                text(format!(
-                    "{}, {}",
-                    loaded.location.name, loaded.location.country
-                ))
-                .size(20)
-                .color(ACCENT),
-                text(c.main_condition.to_string())
-                    .size(16)
-                    .color(condition_color(&c.main_condition)),
+                text(c.location_line.clone()).size(20).color(ACCENT),
+                text(c.condition.clone()).size(16).color(tone_color(c.tone)),
             ]
             .spacing(2),
             Space::with_width(Length::Fill),
-            text(format!("{:.1}{}", c.temperature, temp_unit)).size(44),
+            text(c.temperature.clone()).size(44),
         ]
         .spacing(16)
         .align_y(Alignment::Center),
         row![
-            stat("Feels like", format!("{:.1}{}", c.feels_like, temp_unit)),
-            stat("Humidity", format!("{}%", c.humidity)),
-            stat(
-                "Wind",
-                format!(
-                    "{:.1} {} {}",
-                    c.wind_speed,
-                    wind_unit,
-                    wind_direction_label(c.wind_direction)
-                )
-            ),
-            stat(
-                "Local time",
-                format!("{:02}:{:02}", local.hour(), local.minute())
-            ),
+            stat("Feels like", c.feels_like.clone()),
+            stat("Humidity", c.humidity.clone()),
+            stat("Wind", c.wind.clone()),
+            stat("Local time", c.local_time.clone()),
         ]
         .spacing(24),
     ]
@@ -116,25 +94,17 @@ fn current_card<'a>(loaded: &'a Loaded, config: &'a WeatherConfig) -> Element<'a
     card(content.into())
 }
 
-fn hourly_strip<'a>(
-    hourly: &'a [HourlyForecast],
-    location: &'a Location,
-    config: &'a WeatherConfig,
-) -> Element<'a, Message> {
-    let temp_unit = temp_unit_label(&config.units);
+fn hourly_strip(hours: &[HourRow]) -> Element<'_, Message> {
     let mut r = row![].spacing(10);
 
-    for hour in hourly.iter().take(24) {
-        let local = convert_to_local(&hour.timestamp, &location.timezone);
+    for h in hours {
         let cell = column![
-            text(format!("{:02}:00", local.hour()))
-                .size(13)
-                .color(MUTED),
-            text(hour.main_condition.get_emoji()).size(24),
-            text(format!("{:.0}{}", hour.temperature, temp_unit)).size(15),
-            text(format!("💧{}%", pop_percent(hour.pop)))
+            text(h.time.clone()).size(13).color(MUTED),
+            text(h.emoji).size(24),
+            text(h.temperature.clone()).size(15),
+            text(format!("💧{}%", h.pop_percent))
                 .size(12)
-                .color(condition_color(&hour.main_condition)),
+                .color(tone_color(h.tone)),
         ]
         .spacing(4)
         .align_x(Alignment::Center);
@@ -149,37 +119,24 @@ fn hourly_strip<'a>(
         .into()
 }
 
-fn daily_list<'a>(
-    daily: &'a [DailyForecast],
-    location: &'a Location,
-    config: &'a WeatherConfig,
-) -> Element<'a, Message> {
-    let temp_unit = temp_unit_label(&config.units);
+fn daily_list(days: &[DayRow]) -> Element<'_, Message> {
     let mut col = column![].spacing(8);
 
-    for (i, day) in daily.iter().take(7).enumerate() {
-        let local = convert_to_local(&day.date, &location.timezone);
-        let label = day_label(i, weekday_name(&local));
+    for d in days {
         let line = row![
-            text(label)
+            text(d.label.clone())
                 .size(15)
                 .width(Length::Fixed(110.0))
                 .color(ACCENT),
-            text(day.main_condition.get_emoji()).size(20),
-            text(day.main_condition.to_string())
+            text(d.emoji).size(20),
+            text(d.condition.clone())
                 .size(14)
                 .width(Length::Fixed(130.0))
-                .color(condition_color(&day.main_condition)),
+                .color(tone_color(d.tone)),
             Space::with_width(Length::Fill),
-            text(format!("💧 {}%", pop_percent(day.pop)))
-                .size(14)
-                .color(MUTED),
+            text(format!("💧 {}%", d.pop_percent)).size(14).color(MUTED),
             Space::with_width(Length::Fixed(24.0)),
-            text(format!(
-                "{:.0}{} / {:.0}{}",
-                day.temp_max, temp_unit, day.temp_min, temp_unit
-            ))
-            .size(15),
+            text(d.temp_high_low.clone()).size(15),
         ]
         .spacing(12)
         .align_y(Alignment::Center);

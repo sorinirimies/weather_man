@@ -1,18 +1,13 @@
 //! Application state, messages, and update logic for the Iced GUI.
 
 use iced::Task;
-use weather_man_core::{
-    CurrentWeather, DailyForecast, HourlyForecast, Location, LocationService, WeatherConfig,
-    WeatherForecaster, WeatherProvider,
-};
+use weather_man_core::{load_report, ForecastView, WeatherConfig};
 
-/// A successfully loaded weather bundle for a location.
+/// A successfully loaded, ready-to-render forecast.
 #[derive(Debug, Clone)]
 pub struct Loaded {
-    pub location: Location,
-    pub current: CurrentWeather,
-    pub hourly: Vec<HourlyForecast>,
-    pub daily: Vec<DailyForecast>,
+    pub location_name: String,
+    pub view: ForecastView,
 }
 
 /// Messages driving the application.
@@ -60,7 +55,7 @@ impl App {
     /// Window title.
     pub fn title(&self) -> String {
         match &self.loaded {
-            Some(l) => format!("Weather Man — {}", l.location.name),
+            Some(l) => format!("Weather Man — {}", l.location_name),
             None => "Weather Man".to_string(),
         }
     }
@@ -74,11 +69,7 @@ impl App {
             }
             Message::Search => {
                 self.status = Status::Loading;
-                let query = if self.query.trim().is_empty() {
-                    None
-                } else {
-                    Some(self.query.trim().to_string())
-                };
+                let query = self.current_query();
                 Task::perform(fetch(self.config.clone(), query), Message::Fetched)
             }
             Message::ToggleUnits => {
@@ -89,10 +80,8 @@ impl App {
                 };
                 self.status = Status::Loading;
                 let query = self
-                    .loaded
-                    .as_ref()
-                    .map(|l| l.location.name.clone())
-                    .filter(|n| !n.is_empty());
+                    .current_query()
+                    .or_else(|| self.loaded.as_ref().map(|l| l.location_name.clone()));
                 Task::perform(fetch(self.config.clone(), query), Message::Fetched)
             }
             Message::Fetched(Ok(loaded)) => {
@@ -106,36 +95,33 @@ impl App {
             }
         }
     }
+
+    fn current_query(&self) -> Option<String> {
+        let q = self.query.trim();
+        if q.is_empty() {
+            None
+        } else {
+            Some(q.to_string())
+        }
+    }
 }
 
-/// Fetch weather for an optional named location (auto-detect when `None`).
+/// Fetch weather for an optional named location and build its view-model.
 async fn fetch(config: WeatherConfig, query: Option<String>) -> Result<Box<Loaded>, String> {
-    let location_service = LocationService::new();
-    let location = match query {
-        Some(name) => location_service
-            .get_location_by_name(&name)
-            .await
-            .map_err(|e| e.to_string())?,
-        None => location_service
-            .get_location_from_ip()
-            .await
-            .map_err(|e| e.to_string())?,
-    };
-
-    let forecaster = WeatherForecaster::new(config);
-    let forecast = forecaster
-        .forecast(&location)
+    let report = load_report(&config, query.as_deref())
         .await
         .map_err(|e| e.to_string())?;
 
-    let current = forecast
-        .current
-        .ok_or_else(|| "No current weather data available".to_string())?;
+    let view = ForecastView::build(
+        report.current.as_ref(),
+        &report.hourly,
+        &report.daily,
+        &report.location,
+        &config,
+    );
 
     Ok(Box::new(Loaded {
-        location,
-        current,
-        hourly: forecast.hourly,
-        daily: forecast.daily,
+        location_name: report.location.name,
+        view,
     }))
 }

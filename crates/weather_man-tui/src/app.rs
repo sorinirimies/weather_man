@@ -9,12 +9,11 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::{self, Stdout};
-use weather_man_core::{DailyForecast, HourlyForecast, Location, WeatherConfig};
+use weather_man_core::{ForecastView, Location, WeatherConfig, WeatherReport};
 
 /// The single-page terminal weather UI.
 pub struct WeatherTui {
-    hourly: Vec<HourlyForecast>,
-    daily: Vec<DailyForecast>,
+    view: ForecastView,
     location: Location,
     config: WeatherConfig,
     scroll: u16,
@@ -22,23 +21,25 @@ pub struct WeatherTui {
 }
 
 impl WeatherTui {
-    /// Create a new TUI, entering the alternate screen.
-    pub fn new(
-        hourly: Vec<HourlyForecast>,
-        daily: Vec<DailyForecast>,
-        location: Location,
-        config: WeatherConfig,
-    ) -> Result<Self> {
+    /// Create a new TUI from a fully-resolved weather report.
+    pub fn new(report: WeatherReport, config: WeatherConfig) -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
 
+        let view = ForecastView::build(
+            report.current.as_ref(),
+            &report.hourly,
+            &report.daily,
+            &report.location,
+            &config,
+        );
+
         Ok(Self {
-            hourly,
-            daily,
-            location,
+            view,
+            location: report.location,
             config,
             scroll: 0,
             terminal,
@@ -48,19 +49,11 @@ impl WeatherTui {
     /// Run the event loop until the user quits.
     pub fn run(&mut self) -> Result<()> {
         loop {
-            let total =
-                view::page_line_count(&self.hourly, &self.daily, &self.location, &self.config);
+            let total = view::page_line_count(&self.view);
             let scroll = self.scroll;
 
             self.terminal.draw(|f| {
-                view::render(
-                    f,
-                    &self.hourly,
-                    &self.daily,
-                    &self.location,
-                    &self.config,
-                    scroll,
-                );
+                view::render(f, &self.view, &self.location, &self.config, scroll);
             })?;
 
             if let Event::Key(key) = event::read()? {
