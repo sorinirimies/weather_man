@@ -30,7 +30,7 @@ fn search_bar(app: &App) -> Element<'_, Message> {
 
     row![
         text("⛅ Weather Man").size(24).color(ACCENT),
-        Space::with_width(Length::Fill),
+        Space::new().width(Length::Fill),
         text_input("Search city…", &app.query)
             .on_input(Message::QueryChanged)
             .on_submit(Message::Search)
@@ -76,7 +76,7 @@ fn current_card(c: &CurrentView) -> Element<'_, Message> {
                 text(c.condition.clone()).size(16).color(tone_color(c.tone)),
             ]
             .spacing(2),
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             text(c.temperature.clone()).size(44),
         ]
         .spacing(16)
@@ -133,9 +133,9 @@ fn daily_list(days: &[DayRow]) -> Element<'_, Message> {
                 .size(14)
                 .width(Length::Fixed(130.0))
                 .color(tone_color(d.tone)),
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             text(format!("💧 {}%", d.pop_percent)).size(14).color(MUTED),
-            Space::with_width(Length::Fixed(24.0)),
+            Space::new().width(Length::Fixed(24.0)),
             text(d.temp_high_low.clone()).size(15),
         ]
         .spacing(12)
