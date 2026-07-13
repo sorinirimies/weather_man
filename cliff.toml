@@ -18,7 +18,7 @@ body = """
 {% endfor -%}
 {% endfor -%}
 {% if version and previous.version -%}
-**Full Changelog**: https://github.com/sorinirimies/weather_man/compare/{{ previous.version }}...{{ version }}
+**Full Changelog**: https://github.com/sorinirimies/weatherman/compare/{{ previous.version }}...{{ version }}
 {% endif -%}
 """
 trim = true
@@ -62,4 +62,4 @@ sort_tags = "semver"
 
 [github]
 owner = "sorinirimies"
-repo  = "weather_man"
+repo  = "weatherman"

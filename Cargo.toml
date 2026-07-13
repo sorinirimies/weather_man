@@ -11,7 +11,7 @@ version    = "0.5.0"
 edition    = "2021"
 authors    = ["Sorin Albu-Irimies <mihaiirimies@gmail.com>"]
 license    = "MIT"
-repository = "https://github.com/sorinirimies/weather_man"
+repository = "https://github.com/sorinirimies/weatherman"
 
 # ── Shared dependency versions ─────────────────────────────────────────────────
 # Pin versions here once; each crate references them with `{ workspace = true }`
