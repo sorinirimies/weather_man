@@ -68,7 +68,12 @@ cargo install weatherman-tui
 weatherman
 ```
 
-Type a city and press Enter to search; toggle °C/°F with the units button.
+- Type a city and press Enter to search; toggle °C/°F with the units button.
+- **Click any day** in the 7-day forecast to expand full details (day-part
+  temperatures, feels-like, sunrise/sunset, wind, UV index, precipitation).
+- **Save locations** to the sidebar with “＋ Save current”, then click to switch
+  between them. Saved locations and your unit preference persist across sessions
+  (`<config-dir>/weatherman/settings.json`).
 
 ### TUI
 
