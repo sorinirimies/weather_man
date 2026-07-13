@@ -28,6 +28,17 @@ conventional_commits = true
 filter_unconventional = true
 filter_commits = true
 
+# Normalise the old crate name in historical commit messages so the generated
+# changelog uses the current names (weatherman / weatherman-tui / weatherman-core).
+# The GitHub repo slug in the footer template is unaffected (it is not sourced
+# from commit messages).
+commit_preprocessors = [
+    { pattern = "weather_man-core", replace = "weatherman-core" },
+    { pattern = "weather_man-tui", replace = "weatherman-tui" },
+    { pattern = "weather_man-gui", replace = "weatherman-gui" },
+    { pattern = "weather_man", replace = "weatherman" },
+]
+
 commit_parsers = [
     { message = "^chore: bump version",   skip = true },
     { message = "^chore\\(release\\)",    skip = true },
