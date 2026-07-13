@@ -37,6 +37,7 @@ pub mod api;
 pub mod forecaster;
 pub mod format;
 pub mod location;
+pub mod persistence;
 pub mod presentation;
 pub mod types;
 
@@ -47,11 +48,14 @@ pub use forecaster::{
 };
 pub use format::{
     condition_tone, convert_to_local, day_label, format_date_short, format_local_time, is_daytime,
-    pop_percent, temp_unit_label, weekday_name, wind_direction_arrow, wind_direction_label,
-    wind_unit_label, ConditionTone,
+    pop_percent, temp_unit_label, uv_label, weekday_name, wind_direction_arrow,
+    wind_direction_label, wind_unit_label, ConditionTone,
 };
 pub use location::LocationService;
-pub use presentation::{CurrentView, DayRow, ForecastView, HourRow, DAILY_LIMIT, HOURLY_LIMIT};
+pub use persistence::{load_settings, save_settings, settings_path, AppSettings};
+pub use presentation::{
+    CurrentView, DayDetail, DayRow, ForecastView, HourRow, DAILY_LIMIT, HOURLY_LIMIT,
+};
 pub use types::{
     CurrentConditions, CurrentWeather, DailyForecast, DetailLevel, Forecast, HourlyForecast,
     Location, WeatherCondition, WeatherConfig, WeatherDescription,

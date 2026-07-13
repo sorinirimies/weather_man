@@ -127,6 +127,22 @@ fn day_row_labels_and_hi_lo() {
 }
 
 #[test]
+fn day_row_detail_is_formatted() {
+    let cfg = WeatherConfig::default();
+    let days = daily(1);
+    let d = DayRow::build(0, &days[0], &location(), &cfg);
+    // Derived day-part temperatures (see sample_daily below).
+    assert_eq!(d.detail.temp_day, "22°C");
+    assert_eq!(d.detail.temp_night, "10°C");
+    assert_eq!(d.detail.feels_like_day, "22°C");
+    assert_eq!(d.detail.uv_index, "3.0 (Moderate)");
+    // pop 0.6 + rain 1.2mm.
+    assert!(d.detail.precipitation.contains("60% chance"));
+    assert!(d.detail.precipitation.contains("1.2 mm rain"));
+    assert!(d.detail.wind.starts_with("4.0 m/s"));
+}
+
+#[test]
 fn forecast_view_caps_and_promotes_current() {
     let cfg = WeatherConfig::default();
     // No explicit current -> first hourly promoted.

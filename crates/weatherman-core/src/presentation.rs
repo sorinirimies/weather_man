@@ -7,8 +7,8 @@
 //! two front-ends pixel-for-pixel consistent and makes them trivially testable.
 
 use crate::format::{
-    condition_tone, convert_to_local, day_label, pop_percent, temp_unit_label, weekday_name,
-    wind_direction_label, wind_unit_label, ConditionTone,
+    condition_tone, convert_to_local, day_label, format_local_time, pop_percent, temp_unit_label,
+    uv_label, weekday_name, wind_direction_label, wind_unit_label, ConditionTone,
 };
 use crate::types::{CurrentConditions, DailyForecast, HourlyForecast, Location, WeatherConfig};
 use chrono::Timelike;
@@ -90,6 +90,63 @@ impl HourRow {
     }
 }
 
+/// Extended, pre-formatted details for a single day, shown when a day row is
+/// expanded. Only fields Open-Meteo actually provides for daily data are
+/// included (humidity/pressure are omitted as they are not real for daily).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DayDetail {
+    pub temp_morning: String,
+    pub temp_day: String,
+    pub temp_evening: String,
+    pub temp_night: String,
+    pub feels_like_day: String,
+    pub feels_like_night: String,
+    pub sunrise: String,
+    pub sunset: String,
+    pub wind: String,
+    pub uv_index: String,
+    pub precipitation: String,
+}
+
+impl DayDetail {
+    fn build(day: &DailyForecast, location: &Location, config: &WeatherConfig) -> Self {
+        let t = temp_unit_label(&config.units);
+        let wind_unit = wind_unit_label(&config.units);
+        let tz = &location.timezone;
+
+        let mut precipitation = format!("{}% chance", pop_percent(day.pop));
+        if let Some(rain) = day.rain {
+            if rain > 0.0 {
+                precipitation.push_str(&format!(" · {:.1} mm rain", rain));
+            }
+        }
+        if let Some(snow) = day.snow {
+            if snow > 0.0 {
+                precipitation.push_str(&format!(" · {:.1} mm snow", snow));
+            }
+        }
+
+        Self {
+            temp_morning: format!("{:.0}{}", day.temp_morning, t),
+            temp_day: format!("{:.0}{}", day.temp_day, t),
+            temp_evening: format!("{:.0}{}", day.temp_evening, t),
+            temp_night: format!("{:.0}{}", day.temp_night, t),
+            feels_like_day: format!("{:.0}{}", day.feels_like_day, t),
+            feels_like_night: format!("{:.0}{}", day.feels_like_night, t),
+            sunrise: format_local_time(&day.sunrise, tz),
+            sunset: format_local_time(&day.sunset, tz),
+            wind: format!(
+                "{:.1} {} {}",
+                day.wind_speed,
+                wind_unit,
+                wind_direction_label(day.wind_direction)
+            ),
+            uv_index: format!("{:.1} ({})", day.uv_index, uv_label(day.uv_index)),
+            precipitation,
+        }
+    }
+}
+
 /// Pre-formatted single-day row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DayRow {
@@ -100,6 +157,8 @@ pub struct DayRow {
     pub condition: String,
     pub temp_high_low: String,
     pub pop_percent: u8,
+    /// Extended details for the expandable panel.
+    pub detail: DayDetail,
 }
 
 impl DayRow {
@@ -123,6 +182,7 @@ impl DayRow {
                 day.temp_max, temp_unit, day.temp_min, temp_unit
             ),
             pop_percent: pop_percent(day.pop),
+            detail: DayDetail::build(day, location, config),
         }
     }
 }

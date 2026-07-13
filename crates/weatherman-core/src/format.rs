@@ -146,3 +146,14 @@ pub fn format_date_short(date: &DateTime<Utc>, timezone: &str) -> String {
 pub fn pop_percent(pop: f64) -> u8 {
     (pop.clamp(0.0, 1.0) * 100.0).round() as u8
 }
+
+/// Human-readable risk band for a UV index value.
+pub fn uv_label(uv: f64) -> &'static str {
+    match uv.max(0.0) as u32 {
+        0..=2 => "Low",
+        3..=5 => "Moderate",
+        6..=7 => "High",
+        8..=10 => "Very High",
+        _ => "Extreme",
+    }
+}
