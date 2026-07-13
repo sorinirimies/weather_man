@@ -4,18 +4,24 @@ use crate::app::{App, Loaded, Message, Status};
 use crate::theme::{tone_color, ACCENT, MUTED};
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Alignment, Element, Length};
-use weatherman_core::{CurrentView, DayRow, ForecastView, HourRow};
+use weatherman_core::{AppSettings, DayDetail, DayRow, ForecastView, HourRow};
 
-/// Top-level view.
+/// Top-level view: search bar on top, sidebar + forecast below.
 pub fn view(app: &App) -> Element<'_, Message> {
-    let body: Element<Message> = match (&app.status, &app.loaded) {
+    let content: Element<Message> = match (&app.status, &app.loaded) {
         (Status::Error(err), _) => error_view(err),
         (Status::Loading, None) => centered("Loading weather…"),
-        (_, Some(loaded)) => loaded_view(loaded),
+        (_, Some(loaded)) => loaded_view(loaded, app.selected_day),
         (_, None) => centered("No data"),
     };
 
-    column![search_bar(app), body]
+    let main = row![
+        sidebar(&app.settings, app.loaded.as_ref()),
+        container(content).width(Length::Fill),
+    ]
+    .spacing(16);
+
+    column![search_bar(app), main]
         .spacing(12)
         .padding(16)
         .into()
@@ -46,7 +52,50 @@ fn search_bar(app: &App) -> Element<'_, Message> {
     .into()
 }
 
-fn loaded_view(loaded: &Loaded) -> Element<'_, Message> {
+/// Left sidebar listing saved locations with add/remove/switch controls.
+fn sidebar<'a>(settings: &'a AppSettings, loaded: Option<&'a Loaded>) -> Element<'a, Message> {
+    let mut col = column![text("📍 Saved Locations").size(16).color(ACCENT)].spacing(8);
+
+    if settings.locations.is_empty() {
+        col = col.push(text("No saved locations yet.").size(13).color(MUTED));
+    } else {
+        let active = loaded.map(|l| l.location_name.clone());
+        for (i, loc) in settings.locations.iter().enumerate() {
+            let is_active = active.as_deref() == Some(loc.as_str());
+            let name_color = if is_active { ACCENT } else { MUTED };
+            let entry = row![
+                button(text(loc.clone()).size(14).color(name_color))
+                    .on_press(Message::SelectSavedLocation(loc.clone()))
+                    .style(button::text)
+                    .width(Length::Fill)
+                    .padding(4),
+                button(text("✕").size(13))
+                    .on_press(Message::RemoveSavedLocation(i))
+                    .style(button::text)
+                    .padding(4),
+            ]
+            .align_y(Alignment::Center);
+            col = col.push(entry);
+        }
+    }
+
+    // "Save current" is only actionable when a location is loaded.
+    let mut save_btn = button(text("＋ Save current").size(13)).padding(6);
+    if loaded.is_some() {
+        save_btn = save_btn.on_press(Message::SaveCurrentLocation);
+    }
+    col = col
+        .push(Space::new().height(Length::Fixed(8.0)))
+        .push(save_btn);
+
+    container(col)
+        .padding(12)
+        .width(Length::Fixed(200.0))
+        .style(container::rounded_box)
+        .into()
+}
+
+fn loaded_view(loaded: &Loaded, selected_day: Option<usize>) -> Element<'_, Message> {
     let ForecastView {
         current,
         hours,
@@ -61,13 +110,13 @@ fn loaded_view(loaded: &Loaded) -> Element<'_, Message> {
     col = col
         .push(section_title("Next 24 Hours"))
         .push(hourly_strip(hours))
-        .push(section_title("7-Day Forecast"))
-        .push(daily_list(days));
+        .push(section_title("7-Day Forecast (click a day for details)"))
+        .push(daily_list(days, selected_day));
 
     scrollable(col).height(Length::Fill).into()
 }
 
-fn current_card(c: &CurrentView) -> Element<'_, Message> {
+fn current_card(c: &weatherman_core::CurrentView) -> Element<'_, Message> {
     let content = column![
         row![
             text(c.emoji).size(48),
@@ -119,19 +168,22 @@ fn hourly_strip(hours: &[HourRow]) -> Element<'_, Message> {
         .into()
 }
 
-fn daily_list(days: &[DayRow]) -> Element<'_, Message> {
+fn daily_list(days: &[DayRow], selected: Option<usize>) -> Element<'_, Message> {
     let mut col = column![].spacing(8);
 
-    for d in days {
-        let line = row![
+    for (i, d) in days.iter().enumerate() {
+        let is_open = selected == Some(i);
+        let indicator = if is_open { "▾" } else { "▸" };
+        let summary = row![
+            text(indicator).size(14).color(MUTED),
             text(d.label.clone())
                 .size(15)
-                .width(Length::Fixed(110.0))
+                .width(Length::Fixed(96.0))
                 .color(ACCENT),
             text(d.emoji).size(20),
             text(d.condition.clone())
                 .size(14)
-                .width(Length::Fixed(130.0))
+                .width(Length::Fixed(120.0))
                 .color(tone_color(d.tone)),
             Space::new().width(Length::Fill),
             text(format!("💧 {}%", d.pop_percent)).size(14).color(MUTED),
@@ -140,10 +192,63 @@ fn daily_list(days: &[DayRow]) -> Element<'_, Message> {
         ]
         .spacing(12)
         .align_y(Alignment::Center);
-        col = col.push(card(line.into()));
+
+        let row_button = button(summary)
+            .on_press(Message::DayToggled(i))
+            .style(button::text)
+            .width(Length::Fill)
+            .padding(6);
+
+        if is_open {
+            col = col.push(
+                container(column![row_button, day_detail(&d.detail)].spacing(4))
+                    .style(container::rounded_box)
+                    .padding(4),
+            );
+        } else {
+            col = col.push(container(row_button).style(container::rounded_box));
+        }
     }
 
     col.into()
+}
+
+fn day_detail(detail: &DayDetail) -> Element<'_, Message> {
+    let temps = row![
+        detail_stat("Morning", detail.temp_morning.clone()),
+        detail_stat("Day", detail.temp_day.clone()),
+        detail_stat("Evening", detail.temp_evening.clone()),
+        detail_stat("Night", detail.temp_night.clone()),
+    ]
+    .spacing(20);
+
+    let feels = row![
+        detail_stat("Feels (day)", detail.feels_like_day.clone()),
+        detail_stat("Feels (night)", detail.feels_like_night.clone()),
+        detail_stat("🌅 Sunrise", detail.sunrise.clone()),
+        detail_stat("🌇 Sunset", detail.sunset.clone()),
+    ]
+    .spacing(20);
+
+    let extra = row![
+        detail_stat("Wind", detail.wind.clone()),
+        detail_stat("UV index", detail.uv_index.clone()),
+        detail_stat("Precipitation", detail.precipitation.clone()),
+    ]
+    .spacing(20);
+
+    container(column![temps, feels, extra].spacing(10))
+        .padding(12)
+        .into()
+}
+
+fn detail_stat(label: &str, value: String) -> Element<'_, Message> {
+    column![
+        text(label.to_string()).size(11).color(MUTED),
+        text(value).size(15),
+    ]
+    .spacing(2)
+    .into()
 }
 
 fn stat<'a>(label: &'a str, value: String) -> Element<'a, Message> {

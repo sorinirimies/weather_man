@@ -1,7 +1,9 @@
 //! Application state, messages, and update logic for the Iced GUI.
 
 use iced::Task;
-use weatherman_core::{load_report, ForecastView, WeatherConfig};
+use weatherman_core::{
+    load_report, load_settings, save_settings, AppSettings, ForecastView, WeatherConfig,
+};
 
 /// A successfully loaded, ready-to-render forecast.
 #[derive(Debug, Clone)]
@@ -21,6 +23,14 @@ pub enum Message {
     ToggleUnits,
     /// A weather fetch finished.
     Fetched(Result<Box<Loaded>, String>),
+    /// Expand/collapse the detail panel for a day (by index).
+    DayToggled(usize),
+    /// Save the currently displayed location to the sidebar.
+    SaveCurrentLocation,
+    /// Switch to a saved location (by name) and fetch it.
+    SelectSavedLocation(String),
+    /// Remove a saved location by its index.
+    RemoveSavedLocation(usize),
 }
 
 /// Loading status of the current view.
@@ -37,19 +47,32 @@ pub struct App {
     pub query: String,
     pub status: Status,
     pub loaded: Option<Loaded>,
+    pub settings: AppSettings,
+    pub selected_day: Option<usize>,
 }
 
 impl App {
-    /// Build the initial state and kick off an auto-detected fetch.
+    /// Build the initial state and kick off the first fetch.
     pub fn new() -> (Self, Task<Message>) {
-        let config = WeatherConfig::default();
+        let settings = load_settings();
+        let config = WeatherConfig {
+            units: settings.units.clone(),
+            ..Default::default()
+        };
+        // Open on the first saved location if there is one, else auto-detect.
+        let initial_query = settings.locations.first().cloned();
         let app = Self {
             config: config.clone(),
             query: String::new(),
             status: Status::Loading,
             loaded: None,
+            settings,
+            selected_day: None,
         };
-        (app, Task::perform(fetch(config, None), Message::Fetched))
+        (
+            app,
+            Task::perform(fetch(config, initial_query), Message::Fetched),
+        )
     }
 
     /// Window title.
@@ -67,25 +90,21 @@ impl App {
                 self.query = q;
                 Task::none()
             }
-            Message::Search => {
-                self.status = Status::Loading;
-                let query = self.current_query();
-                Task::perform(fetch(self.config.clone(), query), Message::Fetched)
-            }
+            Message::Search => self.fetch_query(self.current_query()),
             Message::ToggleUnits => {
                 self.config.units = if self.config.units == "imperial" {
                     "metric".to_string()
                 } else {
                     "imperial".to_string()
                 };
-                self.status = Status::Loading;
-                let query = self
-                    .current_query()
-                    .or_else(|| self.loaded.as_ref().map(|l| l.location_name.clone()));
-                Task::perform(fetch(self.config.clone(), query), Message::Fetched)
+                self.settings.units = self.config.units.clone();
+                let _ = save_settings(&self.settings);
+                let query = self.active_location();
+                self.fetch_query(query)
             }
             Message::Fetched(Ok(loaded)) => {
                 self.status = Status::Ready;
+                self.selected_day = None;
                 self.loaded = Some(*loaded);
                 Task::none()
             }
@@ -93,7 +112,39 @@ impl App {
                 self.status = Status::Error(err);
                 Task::none()
             }
+            Message::DayToggled(index) => {
+                self.selected_day = if self.selected_day == Some(index) {
+                    None
+                } else {
+                    Some(index)
+                };
+                Task::none()
+            }
+            Message::SaveCurrentLocation => {
+                if let Some(loaded) = &self.loaded {
+                    if self.settings.add_location(&loaded.location_name) {
+                        let _ = save_settings(&self.settings);
+                    }
+                }
+                Task::none()
+            }
+            Message::SelectSavedLocation(name) => {
+                self.query = name.clone();
+                self.fetch_query(Some(name))
+            }
+            Message::RemoveSavedLocation(index) => {
+                self.settings.remove_location(index);
+                let _ = save_settings(&self.settings);
+                Task::none()
+            }
         }
+    }
+
+    /// Kick off a fetch for `query`, moving into the loading state.
+    fn fetch_query(&mut self, query: Option<String>) -> Task<Message> {
+        self.status = Status::Loading;
+        self.selected_day = None;
+        Task::perform(fetch(self.config.clone(), query), Message::Fetched)
     }
 
     fn current_query(&self) -> Option<String> {
@@ -103,6 +154,12 @@ impl App {
         } else {
             Some(q.to_string())
         }
+    }
+
+    /// The location to re-fetch (current search, else the loaded location).
+    fn active_location(&self) -> Option<String> {
+        self.current_query()
+            .or_else(|| self.loaded.as_ref().map(|l| l.location_name.clone()))
     }
 }
 
