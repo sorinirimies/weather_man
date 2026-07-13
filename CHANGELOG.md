@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-07-13
+### ✨ Features
+- add DayDetail view-model and persistent AppSettings
+- expandable day details and saved-locations sidebar
+### 📚 Documentation
+- document GUI day details and saved locations
+**Full Changelog**: https://github.com/sorinirimies/weather_man/compare/v0.4.2...v0.5.0
 ## [0.4.2] - 2026-07-10
 ### 📦 Build
 - update all workspace dependencies
